@@ -30,6 +30,7 @@ public:
     void applyCurrentFitMode();
     void centerForZoom();
     void setDisplayScale(float scale);
+    void refreshZoomIndicator();
 
     bool showImage(std::unique_ptr<QPixmap> pixmap);
     bool showAnimation(std::shared_ptr<QMovie> movie);

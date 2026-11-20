@@ -329,6 +329,7 @@ void ImageViewerV2::showAnimation(std::shared_ptr<QMovie> _movie) {
             if(mViewLock == LOCK_ALL)
                 applySavedViewportPos();
         }
+        emit scaleChanged(currentScale());
         startAnimation();
     }
 }
@@ -360,6 +361,7 @@ void ImageViewerV2::showImage(std::unique_ptr<QPixmap> _pixmap) {
             if(mViewLock == LOCK_ALL)
                 applySavedViewportPos();
         }
+        emit scaleChanged(currentScale());
         requestScaling();
         update();
     }

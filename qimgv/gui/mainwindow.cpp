@@ -811,6 +811,7 @@ void MW::showWindowed() {
         viewerWidget->setFitUpdatesEnabled(true);
         viewerWidget->applyCurrentFitMode();
     }
+    viewerWidget->refreshZoomIndicator();
     // try to repaint sooner
     qApp->processEvents();
     emit fullscreenStateChanged(false);

@@ -146,15 +146,16 @@ void ViewerWidget::disableVideoPlayer() {
 void ViewerWidget::onScaleChanged(qreal scale) {
     if(!this->isVisible())
         return;
-    if(scale != 1.0f) {
-        zoomIndicator->setScale(scale);
-        if(settings->zoomIndicatorMode() == ZoomIndicatorMode::INDICATOR_ENABLED)
-            zoomIndicator->show();
-        else if((settings->zoomIndicatorMode() == ZoomIndicatorMode::INDICATOR_AUTO))
-            zoomIndicator->show(1500);
-    } else {
+    auto mode = settings->zoomIndicatorMode();
+    if(mode == ZoomIndicatorMode::INDICATOR_DISABLED) {
         zoomIndicator->hide();
+        return;
     }
+    zoomIndicator->setScale(scale);
+    if(mode == ZoomIndicatorMode::INDICATOR_ENABLED)
+        zoomIndicator->show();
+    else if(mode == ZoomIndicatorMode::INDICATOR_AUTO)
+        zoomIndicator->show(1500);
 }
 
 void ViewerWidget::onVideoPlaybackFinished() {
@@ -229,6 +230,11 @@ void ViewerWidget::centerForZoom() {
 void ViewerWidget::setDisplayScale(float scale) {
     if(imageViewer)
         imageViewer->setDisplayScale(scale);
+}
+
+void ViewerWidget::refreshZoomIndicator() {
+    if(imageViewer)
+        onScaleChanged(imageViewer->currentScale());
 }
 
 bool ViewerWidget::showImage(std::unique_ptr<QPixmap> pixmap) {
