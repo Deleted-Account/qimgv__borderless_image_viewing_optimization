@@ -51,7 +51,7 @@ private:
     void removeShortcutAt(int row);
     void adjustSizeToContents();
     QMap<QString, QString> langs; // <"en_US", "English">
-    QButtonGroup fitModeGrp, folderEndGrp, zoomIndGrp;
+    QButtonGroup folderEndGrp, zoomIndGrp;
 
 private slots:
     void saveSettings();
@@ -75,7 +75,6 @@ private slots:
     void onZoomStepSliderChanged(int value);
     void onJPEGQualitySliderChanged(int value);
     void resetToDesktopTheme();    
-    void onAutoResizeLimitSliderChanged(int value);
     void onMouseScrollingSpeedSliderChanged(int value);
 
     void resetZoomLevels();

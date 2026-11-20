@@ -1,4 +1,5 @@
 #include "imageviewerv2.h"
+#include <QWindow>
 
 ImageViewerV2::ImageViewerV2(QWidget *parent) : QGraphicsView(parent),
     pixmap(nullptr),
@@ -12,7 +13,6 @@ ImageViewerV2::ImageViewerV2(QWidget *parent) : QGraphicsView(parent),
     keepFitMode(false),
     loopPlayback(true),
     mIsFullscreen(false),
-    scrollBarWorkaround(true),
     useFixedZoomLevels(false),
     trackpadDetection(true),
     mouseInteraction(MouseInteractionState::MOUSE_NONE),
@@ -65,17 +65,17 @@ ImageViewerV2::ImageViewerV2(QWidget *parent) : QGraphicsView(parent),
 
     pixmapItem.setTransformationMode(Qt::SmoothTransformation);
     pixmapItem.setScale(1.0f);
-    pixmapItem.setOffset(10000, 10000);
-    pixmapItem.setTransformOriginPoint(10000, 10000);
+    pixmapItem.setPos(0, 0);
+    pixmapItem.setTransformOriginPoint(0, 0);
     pixmapItemScaled.setScale(1.0f);
-    pixmapItemScaled.setOffset(10000, 10000);
-    pixmapItemScaled.setTransformOriginPoint(10000, 10000);
+    pixmapItemScaled.setPos(0, 0);
+    pixmapItemScaled.setTransformOriginPoint(0, 0);
 
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     scene = new QGraphicsScene();
-    scene->setSceneRect(0,0,200000,200000);
+    scene->setSceneRect(-10000000, -10000000, 20000000, 20000000);
     scene->setBackgroundBrush(QColor(60,60,103));
     scene->addItem(&pixmapItem);
     scene->addItem(&pixmapItemScaled);
@@ -83,6 +83,8 @@ ImageViewerV2::ImageViewerV2(QWidget *parent) : QGraphicsView(parent),
 
     this->setFrameShape(QFrame::NoFrame);
     this->setScene(scene);
+    installEventFilter(this);
+    viewport()->installEventFilter(this);
 
     connect(scrollTimeLineX, &QTimeLine::frameChanged, this, &ImageViewerV2::scrollToX);
     connect(scrollTimeLineY, &QTimeLine::frameChanged, this, &ImageViewerV2::scrollToY);
@@ -126,6 +128,7 @@ void ImageViewerV2::onDPRChanged() {
         applyFitMode();
         requestScaling();
         update();
+        emit zoomResizeRequested(pixmap->deviceIndependentSize().toSize());
     }
 }
 
@@ -133,8 +136,8 @@ void ImageViewerV2::readSettings() {
     transparencyGrid = settings->transparencyGrid();
     smoothAnimatedImages = settings->smoothAnimatedImages();
     smoothUpscaling = settings->smoothUpscaling();
-    expandImage = settings->expandImage();
-    expandLimit = static_cast<float>(settings->expandLimit());
+    expandImage = settings->expandScaleX2() > 0;
+    expandLimit = settings->expandScaleX2() / 2.f;
     if(expandLimit < 1.0f)
         expandLimit = maxScale;
     keepFitMode = settings->keepFitMode();
@@ -203,6 +206,24 @@ void ImageViewerV2::enableDrags() {
 void ImageViewerV2::disableDrags() {
     dragsEnabled = false;
 }
+
+void ImageViewerV2::setFitUpdatesEnabled(bool enabled) {
+    mFitUpdatesEnabled = enabled;
+}
+
+void ImageViewerV2::applyCurrentFitMode() {
+    applyFitMode();
+    requestScaling();
+}
+
+void ImageViewerV2::centerForZoom() {
+    centerOnPixmap();
+}
+
+void ImageViewerV2::setDisplayScale(float scale) {
+    mDisplayScale = scale > 0 ? scale : 1.0f;
+}
+
 
 void ImageViewerV2::onAnimationTimer() {
     if(!movie)
@@ -278,6 +299,7 @@ void ImageViewerV2::updatePixmap(std::unique_ptr<QPixmap> newPixmap) {
     pixmap = std::move(newPixmap);
     pixmap->setDevicePixelRatio(dpr);
     pixmapItem.setPixmap(*pixmap);
+    syncPixmapItemOffset();
     pixmapItem.show();
     pixmapItem.update();
 }
@@ -319,6 +341,7 @@ void ImageViewerV2::showImage(std::unique_ptr<QPixmap> _pixmap) {
         pixmap = std::move(_pixmap);
         pixmap->setDevicePixelRatio(dpr);
         pixmapItem.setPixmap(*pixmap);
+        syncPixmapItemOffset();
         Qt::TransformationMode mode = Qt::SmoothTransformation;
         if(mScalingFilter == QI_FILTER_NEAREST)
             mode = Qt::FastTransformation;
@@ -349,11 +372,11 @@ void ImageViewerV2::reset() {
     pixmapScaled.reset(nullptr);
     pixmapItem.setPixmap(QPixmap());
     pixmapItem.setScale(1.0f);
-    pixmapItem.setOffset(10000,10000);
+    pixmapItem.setOffset(0, 0);
     pixmap.reset();
     stopAnimation();
     movie = nullptr;
-    centerOn(10000,10000);
+    centerOn(0, 0);
     // when this view is not in focus this it won't update the background
     // so we force it here
     viewport()->update();
@@ -369,6 +392,8 @@ void ImageViewerV2::setScaledPixmap(std::unique_ptr<QPixmap> newFrame) {
     pixmapScaled = std::move(newFrame);
     pixmapScaled->setDevicePixelRatio(dpr);
     pixmapItemScaled.setPixmap(*pixmapScaled);
+    QSizeF scaledLogical = pixmapScaled->deviceIndependentSize();
+    pixmapItemScaled.setOffset(-scaledLogical.width() / 2, -scaledLogical.height() / 2);
     pixmapItem.hide();
     pixmapItemScaled.show();
 }
@@ -516,6 +541,13 @@ void ImageViewerV2::mousePressEvent(QMouseEvent *event) {
     }
     mouseMoveStartPos = event->pos();
     mousePressPos = mouseMoveStartPos;
+
+    // left + right together -> pan, regardless of press order
+    if((event->buttons() & Qt::LeftButton) && (event->buttons() & Qt::RightButton)) {
+        mouseInteraction = MouseInteractionState::MOUSE_PAN_BOTH;
+        return;
+    }
+
     if(event->button() & Qt::RightButton) {
         setZoomAnchor(event->pos());
     } else {
@@ -525,46 +557,69 @@ void ImageViewerV2::mousePressEvent(QMouseEvent *event) {
 
 void ImageViewerV2::mouseMoveEvent(QMouseEvent *event) {
     QWidget::mouseMoveEvent(event);
-    if(!pixmap || mouseInteraction == MouseInteractionState::MOUSE_DRAG || mouseInteraction == MouseInteractionState::MOUSE_WHEEL_ZOOM)
+    if(!pixmap || mouseInteraction == MouseInteractionState::MOUSE_WHEEL_ZOOM)
         return;
 
-    if(event->buttons() & Qt::LeftButton) {
-        // ---------------- DRAG / PAN -------------------
-        // select which action to start
-        if(mouseInteraction == MouseInteractionState::MOUSE_NONE) {
-            if(scaledImageFits()) {
-                if(dragsEnabled)
-                    mouseInteraction = MouseInteractionState::MOUSE_DRAG_BEGIN;
-            } else {
-                mouseInteraction = MouseInteractionState::MOUSE_PAN;
-                if(cursor().shape() != Qt::ClosedHandCursor)
-                    setCursor(Qt::ClosedHandCursor);
-            }
-        }
-        // emit a signal to start dnd; set flag to ignore further mouse move events
-        if(mouseInteraction == MouseInteractionState::MOUSE_DRAG_BEGIN) {
-            if( (abs(mousePressPos.x() - event->pos().x()) > dragThreshold) ||
-                 abs(mousePressPos.y() - event->pos().y()) > dragThreshold)
-            {
-                mouseInteraction = MouseInteractionState::MOUSE_NONE;
-                emit draggedOut();
-            }
-        }
-        // panning
-        if(mouseInteraction == MouseInteractionState::MOUSE_PAN) {
+    bool left = event->buttons().testFlag(Qt::LeftButton);
+    bool right = event->buttons().testFlag(Qt::RightButton);
+
+    if(mouseInteraction == MouseInteractionState::MOUSE_PAN_BOTH) {
+        if(left && right) {
             mousePan(event);
+            return;
+        }
+        mouseInteraction = MouseInteractionState::MOUSE_NONE;
+        return;
+    }
+
+    if(mIsFullscreen) {
+        if(left) {
+            if(mouseInteraction == MouseInteractionState::MOUSE_NONE && !scaledImageFits())
+                mouseInteraction = MouseInteractionState::MOUSE_PAN;
+            if(mouseInteraction == MouseInteractionState::MOUSE_PAN)
+                mousePan(event);
+        } else if(right) {
+            if(mouseInteraction == MouseInteractionState::MOUSE_ZOOM || abs(mousePressPos.y() - event->pos().y()) > zoomThreshold / dpr) {
+                if(cursor().shape() != Qt::SizeVerCursor)
+                    setCursor(Qt::SizeVerCursor);
+                mouseInteraction = MouseInteractionState::MOUSE_ZOOM;
+                if(viewport()->width() * viewport()->height() > LARGE_VIEWPORT_SIZE)
+                    forceFastScale = true;
+                mouseMoveZoom(event);
+            }
+        } else {
+            event->ignore();
         }
         return;
-    } else if(event->buttons() & Qt::RightButton) {
-        // ------------------- ZOOM ----------------------
-        // filter out possible mouse jitter by ignoring low delta drags
-        if(mouseInteraction == MouseInteractionState::MOUSE_ZOOM || abs(mousePressPos.y() - event->pos().y()) > zoomThreshold / dpr) {
-            if(cursor().shape() != Qt::SizeVerCursor) {
-                setCursor(Qt::SizeVerCursor);
+    }
+
+    if(left) {
+        if(mouseInteraction == MouseInteractionState::MOUSE_NONE) {
+            if(event->modifiers() & Qt::ShiftModifier)
+                mouseInteraction = MouseInteractionState::MOUSE_DRAG_BEGIN;
+            else
+                mouseInteraction = MouseInteractionState::MOUSE_WINDOW_MOVE_BEGIN;
+        }
+        if((abs(mousePressPos.x() - event->pos().x()) > dragThreshold) ||
+           (abs(mousePressPos.y() - event->pos().y()) > dragThreshold))
+        {
+            if(mouseInteraction == MouseInteractionState::MOUSE_DRAG_BEGIN) {
+                mouseInteraction = MouseInteractionState::MOUSE_NONE;
+                emit draggedOut();
+            } else if(mouseInteraction == MouseInteractionState::MOUSE_WINDOW_MOVE_BEGIN) {
+                mouseInteraction = MouseInteractionState::MOUSE_NONE;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+                if(window() && window()->windowHandle())
+                    window()->windowHandle()->startSystemMove();
+#endif
             }
+        }
+        return;
+    } else if(right) {
+        if(mouseInteraction == MouseInteractionState::MOUSE_ZOOM || abs(mousePressPos.y() - event->pos().y()) > zoomThreshold / dpr) {
+            if(cursor().shape() != Qt::SizeVerCursor)
+                setCursor(Qt::SizeVerCursor);
             mouseInteraction = MouseInteractionState::MOUSE_ZOOM;
-            // avoid visible lags by forcing fast scale for large viewport sizes
-            // this value possibly needs tweaking
             if(viewport()->width() * viewport()->height() > LARGE_VIEWPORT_SIZE)
                 forceFastScale = true;
             mouseMoveZoom(event);
@@ -585,7 +640,10 @@ void ImageViewerV2::mouseReleaseEvent(QMouseEvent *event) {
         QGraphicsView::mouseReleaseEvent(event);
         event->ignore();
     }
-    mouseInteraction = MouseInteractionState::MOUSE_NONE;
+    if(mouseInteraction == MouseInteractionState::MOUSE_PAN_BOTH && event->buttons() != Qt::NoButton)
+        mouseInteraction = MouseInteractionState::MOUSE_WHEEL_ZOOM; // wait for full release
+    else
+        mouseInteraction = MouseInteractionState::MOUSE_NONE;
 }
 
 // warning for future me:
@@ -608,6 +666,18 @@ void ImageViewerV2::wheelEvent(QWheelEvent *event) {
             zoomInCursor();
         else if(angleDelta < 0)
             zoomOutCursor();
+    } else if(event->modifiers() & Qt::ShiftModifier) {
+        int delta = event->angleDelta().x() != 0 ? event->angleDelta().x() : event->angleDelta().y();
+        QRect imgRect = scaledRectR();
+        if(delta == 0 || imgRect.width() <= width() + 2) {
+            event->ignore();
+            QWidget::wheelEvent(event);
+            return;
+        }
+        event->accept();
+        scroll(-delta * WHEEL_SCROLL_MULTIPLIER, 0, true);
+        saveViewportPos();
+        return;
     } else if(event->modifiers() == Qt::NoModifier) {
         QPoint pixelDelta = event->pixelDelta();
         QPoint angleDelta = event->angleDelta();
@@ -649,6 +719,21 @@ void ImageViewerV2::wheelEvent(QWheelEvent *event) {
                 isWheel = angleDelta.y() && (abs(angleDelta.y())>=120 && !(angleDelta.y() % 60)) && lastTouchpadScroll.elapsed() > 250;
         }
         //qDebug() << "isWheel:" << isWheel << " angle / pixel delta:" << angleDelta << pixelDelta << lastTouchpadScroll.elapsed() << event->phase();
+
+        if(isWheel && imageFitMode == FIT_ORIGINAL && !scaledImageFits()) {
+            QRect imgRect = scaledRectR();
+            bool canScrollDown = angleDelta.y() < 0 && imgRect.bottom() > height() + 2;
+            bool canScrollUp = angleDelta.y() > 0 && imgRect.top() < -2;
+            if(canScrollDown || canScrollUp) {
+                event->accept();
+                scroll(0, -angleDelta.y() * WHEEL_SCROLL_MULTIPLIER * settings->mouseScrollingSpeed(), true);
+                saveViewportPos();
+            } else {
+                event->ignore(); // at image edge: let MW switch image
+                QWidget::wheelEvent(event);
+            }
+            return;
+        }
 
         if(!isWheel) {
             lastTouchpadScroll.restart();
@@ -818,20 +903,37 @@ void ImageViewerV2::fitWindow() {
             swapToOriginalPixmap();
             doZoom(fitWindowScale);
         }
-        // There's either a qt bug or I am misusing something.
-        // First call to scrollbar->setValue() produces wrong results
-        // - unless when called from eventloop
-        if(scrollBarWorkaround) {
-            scrollBarWorkaround = false;
-            QTimer::singleShot(0, this, SLOT(centerOnPixmap()));
-        } else {
-            centerOnPixmap();
-        }
+        centerOnPixmap();
     }
 }
 
 void ImageViewerV2::fitNormal() {
-    fitFree(1.0f);
+    if(!pixmap)
+        return;
+    doZoom(mDisplayScale);
+    applyCropAlignment();
+}
+
+void ImageViewerV2::applyCropAlignment() {
+    if(!pixmap)
+        return;
+    QRectF img = pixmapItem.sceneBoundingRect();
+    QRectF vport = mapToScene(viewport()->rect()).boundingRect();
+    QPointF target = img.center();
+
+    if(img.width() <= vport.width() + 1 && img.height() <= vport.height() + 1) {
+        centerOn(target);
+        return;
+    }
+
+    if(focusIn1to1 == FOCUS_TOP_CENTER) {
+        target.setY(img.top() + vport.height() / 2);
+    } else if(focusIn1to1 == FOCUS_TOP_LEFT) {
+        target.setX(img.left() + vport.width() / 2);
+        target.setY(img.top() + vport.height() / 2);
+    }
+
+    centerOn(target);
 }
 
 void ImageViewerV2::fitWindowStretch() {
@@ -846,39 +948,21 @@ void ImageViewerV2::fitWindowStretch() {
         doZoom(fitWindowStretchScale);
     }
 
-    // Handle scrollbar workaround similar to fitWindow()
-    if(scrollBarWorkaround) {
-        scrollBarWorkaround = false;
-        QTimer::singleShot(0, this, SLOT(centerOnPixmap()));
-    } else {
-        centerOnPixmap();
-    }
+    centerOnPixmap();
 }
 
 void ImageViewerV2::fitFree(float scale) {
     if(!pixmap)
         return;
-    if(focusIn1to1 == FOCUS_TOP) {
-        doZoom(scale);
-        centerIfNecessary();
-        if(scaledSizeR().height() > viewport()->height()) {
-            QPointF centerTarget = pixmapItem.sceneBoundingRect().center();
-            centerTarget.setY(0);
-            centerOn(centerTarget);
-        }
-        snapToEdges();
-    } else {
-        if(focusIn1to1 == FOCUS_CENTER)
-            setZoomAnchor(viewport()->rect().center());
-        else
-            setZoomAnchor(mapFromGlobal(cursor().pos()));
-        zoomAnchored(scale);
-        centerIfNecessary();
-        snapToEdges();
-    }
+    setZoomAnchor(viewport()->rect().center());
+    zoomAnchored(scale);
+    centerIfNecessary();
+    snapToEdges();
 }
 
 void ImageViewerV2::applyFitMode() {
+    if(!mFitUpdatesEnabled)
+        return;
     switch(imageFitMode) {
         case FIT_ORIGINAL:
             fitNormal();
@@ -909,6 +993,9 @@ void ImageViewerV2::setFitMode(ImageFitMode newMode) {
 
 // public, sends scale request
 void ImageViewerV2::setFitOriginal() {
+    mDisplayScale = 1.0f;
+    if(pixmap && !pixmap->isNull())
+        emit nativeFitRequested(pixmap->deviceIndependentSize().toSize());
     setFitMode(FIT_ORIGINAL);
 }
 
@@ -939,9 +1026,11 @@ void ImageViewerV2::resizeEvent(QResizeEvent *event) {
     if(parentWidget()->isVisible()) {
         stopPosAnimation();
         updateMinScale();
-        if(imageFitMode == FIT_FREE || imageFitMode == FIT_ORIGINAL) {
+        if(imageFitMode == FIT_FREE) {
             centerIfNecessary();
             snapToEdges();
+        } else if(imageFitMode == FIT_ORIGINAL) {
+            applyCropAlignment();
         } else {
             applyFitMode();
         }
@@ -954,10 +1043,14 @@ void ImageViewerV2::resizeEvent(QResizeEvent *event) {
 }
 
 void ImageViewerV2::centerOnPixmap() {
-    auto imgRect = pixmapItem.sceneBoundingRect();
-    auto vport = mapToScene(viewport()->geometry()).boundingRect();
-    hs->setValue(pixmapItem.offset().x() - (int)(vport.width()  - imgRect.width())  / 2);
-    vs->setValue(pixmapItem.offset().y() - (int)(vport.height() - imgRect.height()) / 2);
+    centerOn(0, 0);
+}
+
+void ImageViewerV2::syncPixmapItemOffset() {
+    if(!pixmap || pixmap->isNull())
+        return;
+    QSizeF logical = pixmap->deviceIndependentSize();
+    pixmapItem.setOffset(-logical.width() / 2, -logical.height() / 2);
 }
 
 void ImageViewerV2::stopPosAnimation() {
@@ -1223,12 +1316,8 @@ void ImageViewerV2::centerIfNecessary() {
     if(!pixmap)
         return;
     QSize sz = scaledSizeR();
-    auto imgRect = pixmapItem.sceneBoundingRect();
-    auto vport = mapToScene(viewport()->geometry()).boundingRect();
-    if(sz.width() <= viewport()->width())
-        hs->setValue(pixmapItem.offset().x() - (int)(vport.width()  - imgRect.width())  / 2);
-    if(sz.height() <= viewport()->height())
-        vs->setValue(pixmapItem.offset().y() - (int)(vport.height() - imgRect.height()) / 2);
+    if(sz.width() <= viewport()->width() && sz.height() <= viewport()->height())
+        centerOnPixmap();
 }
 
 void ImageViewerV2::snapToEdges() {
@@ -1256,9 +1345,6 @@ void ImageViewerV2::doZoom(float newScale) {
     if(!pixmap)
         return;
     newScale = qBound(minScale, newScale, 500.0f);
-    // fix scene position to integer values
-    auto tl = pixmapItem.sceneBoundingRect().topLeft().toPoint();
-    pixmapItem.setOffset(tl);
     pixmapItem.setScale(newScale);
 
     pixmapItem.setTransformationMode(selectTransformationMode());

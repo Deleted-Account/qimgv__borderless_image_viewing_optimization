@@ -13,7 +13,10 @@ FullscreenInfoOverlayProxy::~FullscreenInfoOverlayProxy() {
 
 void FullscreenInfoOverlayProxy::show() {
     stateBuf.showImmediately = true;
-    init();
+    if(infoOverlay)
+        infoOverlay->show();
+    else
+        init();
 }
 
 void FullscreenInfoOverlayProxy::showWhenReady() {
@@ -39,10 +42,24 @@ void FullscreenInfoOverlayProxy::setInfo(QString _position, QString _fileName, Q
     }
 }
 
+void FullscreenInfoOverlayProxy::setPosition(FloatingWidgetPosition pos) {
+    stateBuf.widgetPosition = pos;
+    if(infoOverlay)
+        infoOverlay->setPosition(pos);
+}
+
+void FullscreenInfoOverlayProxy::setWindowedStyle(bool enabled) {
+    stateBuf.windowedStyle = enabled;
+    if(infoOverlay)
+        infoOverlay->setWindowedStyle(enabled);
+}
+
 void FullscreenInfoOverlayProxy::init() {
     if(infoOverlay)
         return;
     infoOverlay = new FullscreenInfoOverlay(container);
+    infoOverlay->setWindowedStyle(stateBuf.windowedStyle);
+    infoOverlay->setPosition(stateBuf.widgetPosition);
     if(!stateBuf.fileName.isEmpty())
         setInfo(stateBuf.position, stateBuf.fileName, stateBuf.info);
     if(stateBuf.showImmediately)

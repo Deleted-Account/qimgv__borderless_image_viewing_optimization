@@ -62,6 +62,14 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     ui->colorSelectorOverlay->setDescription(tr("Overlay background"));
     ui->colorSelectorOverlayText->setDescription(tr("Overlay text"));
     ui->colorSelectorScrollbar->setDescription(tr("Scrollbars"));
+    ui->windowedInfoBackgroundButton->setDescription(tr("Windowed info background"));
+    ui->windowedInfoTextButton->setDescription(tr("Windowed info text"));
+    ui->windowedInfoBackgroundButton->setAlphaEnabled(true);
+
+    connect(ui->windowedInfoBackgroundModeComboBox, qOverload<int>(&QComboBox::currentIndexChanged),
+            [this](int index) { ui->windowedInfoBackgroundButton->setEnabled(index == 1); });
+    connect(ui->windowedInfoTextModeComboBox, qOverload<int>(&QComboBox::currentIndexChanged),
+            [this](int index) { ui->windowedInfoTextButton->setEnabled(index == 1); });
 
 #ifndef USE_KDE_BLUR
     ui->blurBackgroundCheckBox->setEnabled(false);
@@ -91,10 +99,9 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     setupSidebar();
 
     // setup radioBtn groups
-    fitModeGrp.addButton(ui->fitModeWindow);
-    fitModeGrp.addButton(ui->fitModeWidth);
-    fitModeGrp.addButton(ui->fitMode1to1);
-    fitModeGrp.addButton(ui->fitModeWindowStretch);
+    connect(ui->alwaysExpandCheckBox, &QCheckBox::toggled, this, [this](bool) {
+        onExpandLimitSliderChanged(ui->expandLimitSlider->value());
+    });
     folderEndGrp.addButton(ui->folderEndSwitchFolder);
     folderEndGrp.addButton(ui->folderEndNoAction);
     folderEndGrp.addButton(ui->folderEndLoop);
@@ -131,8 +138,6 @@ SettingsDialog::~SettingsDialog() {
 void SettingsDialog::adjustSizeToContents() {
     // general tab
     ui->gridLayout->activate();
-    ui->horizontalLayout_28->activate();
-    ui->horizontalLayout_19->activate();
     ui->gridLayout_3->activate();
     ui->horizontalLayout_18->activate();
     ui->gridLayout_4->activate();
@@ -182,8 +187,7 @@ void SettingsDialog::readSettings() {
     ui->usePreloaderCheckBox->setChecked(settings->usePreloader());
     ui->useThumbnailCacheCheckBox->setChecked(settings->useThumbnailCache());
     ui->smoothUpscalingCheckBox->setChecked(settings->smoothUpscaling());
-    ui->expandImageCheckBox->setChecked(settings->expandImage());
-    ui->expandImagesGroupContents->setEnabled(settings->expandImage());
+    ui->alwaysExpandCheckBox->setChecked(settings->alwaysExpand());
     ui->smoothAnimatedImagesCheckBox->setChecked(settings->smoothAnimatedImages());
     ui->bgOpacitySlider->setValue(static_cast<int>(settings->backgroundOpacity() * 100));
     ui->blurBackgroundCheckBox->setChecked(settings->blurBackground());
@@ -206,15 +210,33 @@ void SettingsDialog::readSettings() {
         ui->zoomIndicatorOff->setChecked(true);
     ui->showInfoBarFullscreen->setChecked(settings->infoBarFullscreen());
     ui->showInfoBarWindowed->setChecked(settings->infoBarWindowed());
+    ui->showWindowedInfoBar->setChecked(settings->windowedInfoBar());
+    ui->windowedInfoBarAlways->setChecked(settings->windowedInfoBarAlways());
+    ui->windowedInfoBarPositionComboBox->setCurrentIndex(settings->windowedInfoBarPosition());
+
+    QString savedBg = settings->windowedInfoBarBackground();
+    QColor infoBg = savedBg.isEmpty() ? QColor(70, 70, 70, 190) : QColor(savedBg);
+    if(!infoBg.isValid())
+        infoBg = QColor(70, 70, 70, 190);
+    ui->windowedInfoBackgroundModeComboBox->setCurrentIndex(savedBg.isEmpty() ? 0 : 1);
+    ui->windowedInfoBackgroundButton->setColor(infoBg);
+    ui->windowedInfoBackgroundButton->setEnabled(!savedBg.isEmpty());
+
+    QString savedText = settings->windowedInfoBarText();
+    QColor infoText = savedText.isEmpty() ? QColor(232, 232, 232) : QColor(savedText);
+    if(!infoText.isValid())
+        infoText = QColor(232, 232, 232);
+    ui->windowedInfoTextModeComboBox->setCurrentIndex(savedText.isEmpty() ? 0 : 1);
+    ui->windowedInfoTextButton->setColor(infoText);
+    ui->windowedInfoTextButton->setEnabled(!savedText.isEmpty());
     ui->showExtendedInfoTitle->setChecked(settings->windowTitleExtendedInfo());
     ui->cursorAutohideCheckBox->setChecked(settings->cursorAutohide());
-    ui->keepFitModeCheckBox->setChecked(settings->keepFitMode());
-    if(settings->focusPointIn1to1Mode() == FOCUS_TOP)
-        ui->focus1to1Top->setChecked(true);
-    else if(settings->focusPointIn1to1Mode() == FOCUS_CENTER)
-        ui->focus1to1Center->setChecked(true);
+    if(settings->focusPointIn1to1Mode() == FOCUS_TOP_CENTER)
+        ui->focus1to1TopCenter->setChecked(true);
+    else if(settings->focusPointIn1to1Mode() == FOCUS_TOP_LEFT)
+        ui->focus1to1TopLeft->setChecked(true);
     else
-        ui->focus1to1Cursor->setChecked(true);
+        ui->focus1to1Center->setChecked(true);
     ui->slideshowIntervalSpinBox->setValue(settings->slideshowInterval());
     ui->imageScrollingComboBox->setCurrentIndex(settings->imageScrolling());
     ui->saveOverlayCheckBox->setChecked(settings->showSaveOverlay());
@@ -224,7 +246,6 @@ void SettingsDialog::readSettings() {
     else
         ui->thumbStyleExtended->setChecked(true);
     ui->animatedJxlCheckBox->setChecked(settings->jxlAnimation());
-    ui->autoResizeWindowCheckBox->setChecked(settings->autoResizeWindow());
     ui->panelCenterSelectionCheckBox->setChecked(settings->panelCenterSelection());
     ui->useFixedZoomLevelsCheckBox->setChecked(settings->useFixedZoomLevels());
     ui->zoomLevels->setText(settings->zoomLevels());
@@ -249,13 +270,10 @@ void SettingsDialog::readSettings() {
     ui->mouseScrollingSpeedSlider->setValue(static_cast<int>((settings->mouseScrollingSpeed() - 0.5f) / 0.25f));
     onMouseScrollingSpeedSliderChanged(ui->mouseScrollingSpeedSlider->value());
 
-    ui->autoResizeLimitSlider->setValue(static_cast<int>(settings->autoResizeLimit() / 5.f));
-    onAutoResizeLimitSliderChanged(ui->autoResizeLimitSlider->value());
-
     ui->JPEGQualitySlider->setValue(settings->JPEGSaveQuality());
     onJPEGQualitySliderChanged(ui->JPEGQualitySlider->value());
 
-    ui->expandLimitSlider->setValue(settings->expandLimit());
+    ui->expandLimitSlider->setValue(settings->expandScaleX2());
     onExpandLimitSliderChanged(ui->expandLimitSlider->value());
 
     // thumbnailer threads
@@ -272,14 +290,7 @@ void SettingsDialog::readSettings() {
         ui->langComboBox->setCurrentText(langName);
 
     // ##### fit mode #####
-    if(settings->imageFitMode() == FIT_WINDOW)
-        ui->fitModeWindow->setChecked(true);
-    else if(settings->imageFitMode() == FIT_WIDTH)
-        ui->fitModeWidth->setChecked(true);
-    else if(settings->imageFitMode() == FIT_WINDOW_STRETCH)
-        ui->fitModeWindowStretch->setChecked(true);
-    else
-        ui->fitMode1to1->setChecked(true);
+    ui->fit1to1CheckBox->setChecked(settings->imageFitMode() == FIT_ORIGINAL);
 
     // ##### UI #####
     ui->scalingQualityComboBox->setCurrentIndex(settings->scalingFilter());
@@ -308,14 +319,7 @@ void SettingsDialog::saveSettings() {
 
     settings->setLoopSlideshow(ui->loopSlideshowCheckBox->isChecked());
     settings->setFullscreenMode(ui->fullscreenCheckBox->isChecked());
-    if(ui->fitModeWindow->isChecked())
-        settings->setImageFitMode(FIT_WINDOW);
-    else if(ui->fitModeWidth->isChecked())
-        settings->setImageFitMode(FIT_WIDTH);
-    else if(ui->fitModeWindowStretch->isChecked())
-        settings->setImageFitMode(FIT_WINDOW_STRETCH);
-    else
-        settings->setImageFitMode(FIT_ORIGINAL);
+    settings->setImageFitMode(ui->fit1to1CheckBox->isChecked() ? FIT_ORIGINAL : FIT_WINDOW);
 
     settings->setLanguage(langs.key(ui->langComboBox->currentText()));
 
@@ -330,7 +334,6 @@ void SettingsDialog::saveSettings() {
     settings->setUsePreloader(ui->usePreloaderCheckBox->isChecked());
     settings->setUseThumbnailCache(ui->useThumbnailCacheCheckBox->isChecked());
     settings->setSmoothUpscaling(ui->smoothUpscalingCheckBox->isChecked());
-    settings->setExpandImage(ui->expandImageCheckBox->isChecked());
     settings->setSmoothAnimatedImages(ui->smoothAnimatedImagesCheckBox->isChecked());
 
     settings->setBackgroundOpacity(static_cast<qreal>(ui->bgOpacitySlider->value()) / 100.f);
@@ -352,15 +355,25 @@ void SettingsDialog::saveSettings() {
         settings->setZoomIndicatorMode(INDICATOR_DISABLED);
     settings->setInfoBarFullscreen(ui->showInfoBarFullscreen->isChecked());
     settings->setInfoBarWindowed(ui->showInfoBarWindowed->isChecked());
+    settings->setWindowedInfoBar(ui->showWindowedInfoBar->isChecked());
+    settings->setWindowedInfoBarAlways(ui->windowedInfoBarAlways->isChecked());
+    settings->setWindowedInfoBarPosition(ui->windowedInfoBarPositionComboBox->currentIndex());
+    settings->setWindowedInfoBarBackground(
+        ui->windowedInfoBackgroundModeComboBox->currentIndex() == 1
+        ? ui->windowedInfoBackgroundButton->color().name(QColor::HexArgb)
+        : QString());
+    settings->setWindowedInfoBarText(
+        ui->windowedInfoTextModeComboBox->currentIndex() == 1
+        ? ui->windowedInfoTextButton->color().name(QColor::HexArgb)
+        : QString());
     settings->setWindowTitleExtendedInfo(ui->showExtendedInfoTitle->isChecked());
     settings->setCursorAutohide(ui->cursorAutohideCheckBox->isChecked());
-    settings->setKeepFitMode(ui->keepFitModeCheckBox->isChecked());
-    if(ui->focus1to1Top->isChecked())
-        settings->setFocusPointIn1to1Mode(FOCUS_TOP);
-    else if(ui->focus1to1Center->isChecked())
-        settings->setFocusPointIn1to1Mode(FOCUS_CENTER);
+    if(ui->focus1to1TopCenter->isChecked())
+        settings->setFocusPointIn1to1Mode(FOCUS_TOP_CENTER);
+    else if(ui->focus1to1TopLeft->isChecked())
+        settings->setFocusPointIn1to1Mode(FOCUS_TOP_LEFT);
     else
-        settings->setFocusPointIn1to1Mode(FOCUS_CURSOR);
+        settings->setFocusPointIn1to1Mode(FOCUS_CENTER);
 
     settings->setSlideshowInterval(ui->slideshowIntervalSpinBox->value());
 
@@ -386,7 +399,6 @@ void SettingsDialog::saveSettings() {
     else
         settings->setThumbPanelStyle(TH_PANEL_EXTENDED);
     settings->setJxlAnimation(ui->animatedJxlCheckBox->isChecked());
-    settings->setAutoResizeWindow(ui->autoResizeWindowCheckBox->isChecked());
     settings->setPanelCenterSelection(ui->panelCenterSelectionCheckBox->isChecked());
     settings->setUseFixedZoomLevels(ui->useFixedZoomLevelsCheckBox->isChecked());
     settings->setZoomLevels(ui->zoomLevels->text());
@@ -400,8 +412,8 @@ void SettingsDialog::saveSettings() {
     settings->setJPEGSaveQuality(ui->JPEGQualitySlider->value());
     settings->setZoomStep(static_cast<qreal>(ui->zoomStepSlider->value() / 100.f));
     settings->setMouseScrollingSpeed(static_cast<qreal>(0.5f + (ui->mouseScrollingSpeedSlider->value() * 0.25f)));
-    settings->setAutoResizeLimit(ui->autoResizeLimitSlider->value() * 5);
-    settings->setExpandLimit(ui->expandLimitSlider->value());
+    settings->setExpandScaleX2(ui->expandLimitSlider->value());
+    settings->setAlwaysExpand(ui->alwaysExpandCheckBox->isChecked());
     settings->setThumbnailerThreadCount(ui->thumbnailerThreadsSlider->value());
     settings->setMemoryAllocationLimit(ui->memoryLimitSpinBox->value());
 
@@ -645,10 +657,23 @@ void SettingsDialog::selectMpvPath() {
 }
 //------------------------------------------------------------------------------
 void SettingsDialog::onExpandLimitSliderChanged(int value) {
+    const bool always = ui->alwaysExpandCheckBox->isChecked();
+
+    if(value > 0 && value < 3)
+        value = 3; // 1.5x is the first half-stop
+    if(!always && value > 0) {
+        if(value < 4)
+            value = 4; // 2x is the first integer stop
+        else if(value % 2)
+            value = ((value + 1) / 2) * 2;
+    }
+    if(value != ui->expandLimitSlider->value())
+        ui->expandLimitSlider->setValue(value);
+
     if(value == 0)
         ui->expandLimitLabel->setText("-");
     else
-        ui->expandLimitLabel->setText(QString::number(value) + "x");
+        ui->expandLimitLabel->setText(QString::number(value / 2.f, 'f', (value % 2) ? 1 : 0) + "x");
 }
 //------------------------------------------------------------------------------
 void SettingsDialog::onJPEGQualitySliderChanged(int value) {
@@ -669,10 +694,6 @@ void SettingsDialog::onThumbnailerThreadsSliderChanged(int value) {
 //------------------------------------------------------------------------------
 void SettingsDialog::onBgOpacitySliderChanged(int value) {
     ui->bgOpacityPercentLabel->setText(QString::number(value) + "%");
-}
-//------------------------------------------------------------------------------
-void SettingsDialog::onAutoResizeLimitSliderChanged(int value) {
-    ui->autoResizeLimit->setText(QString::number(value * 5.f, 'f', 0) + "%");
 }
 //------------------------------------------------------------------------------
 int SettingsDialog::exec() {

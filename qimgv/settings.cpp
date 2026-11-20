@@ -143,6 +143,10 @@ void Settings::loadStylesheet() {
         //qDebug()<< "dpr=" << qApp->devicePixelRatio() << "pDpr=" << pDpr;
 
         // --- write variables into stylesheet --------------------------
+        auto toRgba = [](const QColor &c) {
+            return "rgba(" + QString::number(c.red()) + "," + QString::number(c.green()) + ","
+                   + QString::number(c.blue()) + "," + QString::number(c.alphaF() * 100, 'f', 1) + "%)";
+        };
         styleSheet.replace("%font_small%", QString::number(font_small)+"pt");
         styleSheet.replace("%font_large%", QString::number(font_large)+"pt");
         styleSheet.replace("%button_height%", QString::number(button_height)+"px");
@@ -204,6 +208,19 @@ void Settings::loadStylesheet() {
         styleSheet.replace("%overlay_rgba%",         "rgba(" + QString::number(colors.overlay.red())   + ","
                                                              + QString::number(colors.overlay.green()) + ","
                                                              + QString::number(colors.overlay.blue())  + ",90%)");
+
+        QColor windowedInfoBg = windowedInfoBarBackground().isEmpty()
+                ? QColor(70, 70, 70, 190)
+                : QColor(windowedInfoBarBackground());
+        if(!windowedInfoBg.isValid())
+            windowedInfoBg = QColor(70, 70, 70, 190);
+        QColor windowedInfoText = windowedInfoBarText().isEmpty()
+                ? QColor(232, 232, 232)
+                : QColor(windowedInfoBarText());
+        if(!windowedInfoText.isValid())
+            windowedInfoText = QColor(232, 232, 232);
+        styleSheet.replace("%windowed_info_bg%",   toRgba(windowedInfoBg));
+        styleSheet.replace("%windowed_info_text%", toRgba(windowedInfoText));
         styleSheet.replace("%fv_backdrop_rgba%",     "rgba(" + QString::number(colors.folderview_hc2.red())   + ","
                                                              + QString::number(colors.folderview_hc2.green()) + ","
                                                              + QString::number(colors.folderview_hc2.blue())  + ",80%)");
@@ -823,6 +840,25 @@ void Settings::setExpandImage(bool mode) {
     settings->settingsConf->setValue("expandImage", mode);
 }
 //------------------------------------------------------------------------------
+bool Settings::alwaysExpand() {
+    return settings->settingsConf->value("alwaysExpand", false).toBool();
+}
+
+void Settings::setAlwaysExpand(bool mode) {
+    settings->settingsConf->setValue("alwaysExpand", mode);
+}
+//------------------------------------------------------------------------------
+int Settings::expandScaleX2() {
+    int value = settings->settingsConf->value("expandScaleX2", 0).toInt();
+    if(value < 0 || value > 14)
+        value = 0;
+    return value;
+}
+
+void Settings::setExpandScaleX2(int value) {
+    settings->settingsConf->setValue("expandScaleX2", qBound(0, value, 14));
+}
+//------------------------------------------------------------------------------
 int Settings::expandLimit() {
     return settings->settingsConf->value("expandLimit", 2).toInt();
 }
@@ -882,6 +918,55 @@ bool Settings::infoBarWindowed() {
 
 void Settings::setInfoBarWindowed(bool mode) {
     settings->settingsConf->setValue("infoBarWindowed", mode);
+}
+//------------------------------------------------------------------------------
+bool Settings::windowedInfoBar() {
+    return settings->settingsConf->value("windowedInfoBar", true).toBool();
+}
+
+void Settings::setWindowedInfoBar(bool mode) {
+    settings->settingsConf->setValue("windowedInfoBar", mode);
+}
+//------------------------------------------------------------------------------
+bool Settings::windowedInfoBarAlways() {
+    return settings->settingsConf->value("windowedInfoBarAlways", false).toBool();
+}
+
+void Settings::setWindowedInfoBarAlways(bool mode) {
+    settings->settingsConf->setValue("windowedInfoBarAlways", mode);
+}
+//------------------------------------------------------------------------------
+int Settings::windowedInfoBarPosition() {
+    int index = settings->settingsConf->value("windowedInfoBarPosition", 0).toInt();
+    switch(index) {
+        case 1: return 1; // Top
+        case 2: return 2; // Top Right
+        case 5: return 3; // Bottom Left
+        case 6: return 4; // Bottom
+        case 7: return 5; // Bottom Right
+        case 4: return 2; // old Right -> Top Right
+        default: return 0; // Top Left, and removed options
+    }
+}
+
+void Settings::setWindowedInfoBarPosition(int index) {
+    settings->settingsConf->setValue("windowedInfoBarPosition", qBound(0, index, 5));
+}
+//------------------------------------------------------------------------------
+QString Settings::windowedInfoBarBackground() {
+    return settings->settingsConf->value("windowedInfoBarBackground", "").toString();
+}
+
+void Settings::setWindowedInfoBarBackground(QString color) {
+    settings->settingsConf->setValue("windowedInfoBarBackground", color);
+}
+//------------------------------------------------------------------------------
+QString Settings::windowedInfoBarText() {
+    return settings->settingsConf->value("windowedInfoBarText", "").toString();
+}
+
+void Settings::setWindowedInfoBarText(QString color) {
+    settings->settingsConf->setValue("windowedInfoBarText", color);
 }
 //------------------------------------------------------------------------------
 bool Settings::windowTitleExtendedInfo() {

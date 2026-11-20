@@ -310,6 +310,19 @@ FullscreenInfoOverlay QLabel {
     color: %overlay_text%;
 }
 
+#WindowInfoOverlay {
+    border: 0px solid transparent;
+    background-color: %windowed_info_bg%;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+#WindowInfoOverlay QLabel {
+    color: %windowed_info_text%;
+}
+
 /*----------------------------------------------------------------------------*/
 /* Notifications */
 /*----------------------------------------------------------------------------*/

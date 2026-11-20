@@ -63,9 +63,9 @@ enum DefaultCropAction {
 };
 
 enum ImageFocusPoint {
-    FOCUS_TOP,
-    FOCUS_CENTER,
-    FOCUS_CURSOR
+    FOCUS_TOP_CENTER = 0,
+    FOCUS_CENTER = 1,
+    FOCUS_TOP_LEFT = 2
 };
 
 enum ImageScrolling {
@@ -150,6 +150,10 @@ public:
     void setSmoothUpscaling(bool mode);
     void setExpandImage(bool mode);
     bool expandImage();
+    bool alwaysExpand();
+    void setAlwaysExpand(bool mode);
+    int expandScaleX2();
+    void setExpandScaleX2(int value);
     ScalingFilter scalingFilter();
     void setScalingFilter(ScalingFilter mode);
     bool smoothAnimatedImages();
@@ -182,6 +186,17 @@ public:
     void setInfoBarFullscreen(bool mode);
     bool infoBarWindowed();
     void setInfoBarWindowed(bool mode);
+
+    bool windowedInfoBar();
+    void setWindowedInfoBar(bool mode);
+    bool windowedInfoBarAlways();
+    void setWindowedInfoBarAlways(bool mode);
+    int windowedInfoBarPosition();
+    void setWindowedInfoBarPosition(int index);
+    QString windowedInfoBarBackground();
+    void setWindowedInfoBarBackground(QString color);
+    QString windowedInfoBarText();
+    void setWindowedInfoBarText(QString color);
 
     bool windowTitleExtendedInfo();
     void setWindowTitleExtendedInfo(bool mode);

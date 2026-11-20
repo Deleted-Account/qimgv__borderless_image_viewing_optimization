@@ -13,12 +13,19 @@ void ColorSelectorButton::setDescription(QString text) {
     this->mDescription = text;
 }
 
+void ColorSelectorButton::setAlphaEnabled(bool enabled) {
+    mAlphaEnabled = enabled;
+}
+
 QColor ColorSelectorButton::color() {
     return mColor;
 }
 
 void ColorSelectorButton::showColorSelector() {
-    QColor newColor = QColorDialog::getColor(mColor, this, mDescription);
+    QColorDialog::ColorDialogOptions options = mAlphaEnabled
+            ? QColorDialog::ShowAlphaChannel
+            : QColorDialog::ColorDialogOptions();
+    QColor newColor = QColorDialog::getColor(mColor, this, mDescription, options);
     if(newColor.isValid()) {
         mColor = newColor;
         update();

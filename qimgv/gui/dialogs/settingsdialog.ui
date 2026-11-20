@@ -657,6 +657,135 @@
                         </property>
                        </widget>
                       </item>
+                      <item row="3" column="0">
+                       <widget class="QCheckBox" name="showWindowedInfoBar">
+                        <property name="text">
+                         <string>Windowed info bar</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="4" column="0">
+                       <widget class="QCheckBox" name="windowedInfoBarAlways">
+                        <property name="text">
+                         <string>Always show windowed info bar</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="0" colspan="2">
+                       <layout class="QHBoxLayout" name="horizontalLayout_windowedInfoPosition">
+                        <item>
+                         <widget class="QLabel" name="label_windowedInfoPosition">
+                          <property name="text">
+                           <string>Windowed info position:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QComboBox" name="windowedInfoBarPositionComboBox">
+                          <item>
+                           <property name="text">
+                            <string>Top Left</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Top</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Top Right</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Bottom Left</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Bottom</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Bottom Right</string>
+                           </property>
+                          </item>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                      <item row="6" column="0" colspan="2">
+                       <layout class="QHBoxLayout" name="horizontalLayout_windowedInfoBackground">
+                        <item>
+                         <widget class="QLabel" name="label_windowedInfoBackground">
+                          <property name="text">
+                           <string>Windowed info background:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QComboBox" name="windowedInfoBackgroundModeComboBox">
+                          <item>
+                           <property name="text">
+                            <string>Default</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Custom</string>
+                           </property>
+                          </item>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="ColorSelectorButton" name="windowedInfoBackgroundButton">
+                          <property name="minimumSize">
+                           <size>
+                            <width>48</width>
+                            <height>22</height>
+                           </size>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                      <item row="7" column="0" colspan="2">
+                       <layout class="QHBoxLayout" name="horizontalLayout_windowedInfoText">
+                        <item>
+                         <widget class="QLabel" name="label_windowedInfoText">
+                          <property name="text">
+                           <string>Windowed info text:</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QComboBox" name="windowedInfoTextModeComboBox">
+                          <item>
+                           <property name="text">
+                            <string>Default</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>Custom</string>
+                           </property>
+                          </item>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="ColorSelectorButton" name="windowedInfoTextButton">
+                          <property name="minimumSize">
+                           <size>
+                            <width>48</width>
+                            <height>22</height>
+                           </size>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
                      </layout>
                     </item>
                     <item>
@@ -735,153 +864,6 @@
                        <string notr="true">SLine</string>
                       </property>
                      </widget>
-                    </item>
-                    <item>
-                     <layout class="QHBoxLayout" name="horizontalLayout_28">
-                      <property name="leftMargin">
-                       <number>0</number>
-                      </property>
-                      <property name="topMargin">
-                       <number>0</number>
-                      </property>
-                      <property name="rightMargin">
-                       <number>0</number>
-                      </property>
-                      <item>
-                       <widget class="QCheckBox" name="autoResizeWindowCheckBox">
-                        <property name="text">
-                         <string>Automatic window resize</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item>
-                       <widget class="QLabel" name="label_50">
-                        <property name="accessibleName">
-                         <string notr="true">SNoteText</string>
-                        </property>
-                        <property name="text">
-                         <string>Match displayed content</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item>
-                       <spacer name="horizontalSpacer_19">
-                        <property name="orientation">
-                         <enum>Qt::Horizontal</enum>
-                        </property>
-                        <property name="sizeHint" stdset="0">
-                         <size>
-                          <width>40</width>
-                          <height>20</height>
-                         </size>
-                        </property>
-                       </spacer>
-                      </item>
-                     </layout>
-                    </item>
-                    <item>
-                     <layout class="QHBoxLayout" name="horizontalLayout_19">
-                      <property name="leftMargin">
-                       <number>0</number>
-                      </property>
-                      <property name="topMargin">
-                       <number>0</number>
-                      </property>
-                      <property name="rightMargin">
-                       <number>0</number>
-                      </property>
-                      <property name="bottomMargin">
-                       <number>0</number>
-                      </property>
-                      <item>
-                       <widget class="QLabel" name="label_39">
-                        <property name="text">
-                         <string>Screen area limit for auto resize:</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item>
-                       <widget class="QSlider" name="autoResizeLimitSlider">
-                        <property name="sizePolicy">
-                         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="minimumSize">
-                         <size>
-                          <width>200</width>
-                          <height>0</height>
-                         </size>
-                        </property>
-                        <property name="minimum">
-                         <number>6</number>
-                        </property>
-                        <property name="maximum">
-                         <number>20</number>
-                        </property>
-                        <property name="singleStep">
-                         <number>1</number>
-                        </property>
-                        <property name="pageStep">
-                         <number>2</number>
-                        </property>
-                        <property name="value">
-                         <number>18</number>
-                        </property>
-                        <property name="orientation">
-                         <enum>Qt::Horizontal</enum>
-                        </property>
-                        <property name="tickPosition">
-                         <enum>QSlider::TicksBelow</enum>
-                        </property>
-                        <property name="tickInterval">
-                         <number>1</number>
-                        </property>
-                       </widget>
-                      </item>
-                      <item>
-                       <widget class="QLabel" name="autoResizeLimit">
-                        <property name="sizePolicy">
-                         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="minimumSize">
-                         <size>
-                          <width>60</width>
-                          <height>0</height>
-                         </size>
-                        </property>
-                        <property name="maximumSize">
-                         <size>
-                          <width>60</width>
-                          <height>16777215</height>
-                         </size>
-                        </property>
-                        <property name="text">
-                         <string>xx</string>
-                        </property>
-                        <property name="alignment">
-                         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-                        </property>
-                       </widget>
-                      </item>
-                      <item>
-                       <spacer name="horizontalSpacer_17">
-                        <property name="orientation">
-                         <enum>Qt::Horizontal</enum>
-                        </property>
-                        <property name="sizeHint" stdset="0">
-                         <size>
-                          <width>40</width>
-                          <height>20</height>
-                         </size>
-                        </property>
-                       </spacer>
-                      </item>
-                     </layout>
                     </item>
                    </layout>
                   </item>
@@ -1983,46 +1965,9 @@
                      <number>0</number>
                     </property>
                     <item>
-                     <widget class="QLabel" name="label_2">
-                      <property name="sizePolicy">
-                       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
+                     <widget class="QCheckBox" name="fit1to1CheckBox">
                       <property name="text">
-                       <string>Image fit:</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QRadioButton" name="fitModeWindow">
-                      <property name="text">
-                       <string>Fit in window</string>
-                      </property>
-                      <property name="checked">
-                       <bool>false</bool>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QRadioButton" name="fitModeWidth">
-                      <property name="text">
-                       <string>Stretch to width</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QRadioButton" name="fitMode1to1">
-                      <property name="text">
-                       <string>1:1</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QRadioButton" name="fitModeWindowStretch">
-                      <property name="text">
-                       <string>Fit in window (stretch)</string>
+                       <string>Crop oversized image (1:1)</string>
                       </property>
                      </widget>
                     </item>
@@ -2040,13 +1985,6 @@
                      </spacer>
                     </item>
                    </layout>
-                  </item>
-                  <item>
-                   <widget class="QCheckBox" name="keepFitModeCheckBox">
-                    <property name="text">
-                     <string>Keep fit mode when switching images</string>
-                    </property>
-                   </widget>
                   </item>
                   <item>
                    <widget class="QWidget" name="widget_3" native="true">
@@ -2080,9 +2018,16 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QRadioButton" name="focus1to1Top">
+                     <widget class="QRadioButton" name="focus1to1TopCenter">
                       <property name="text">
-                       <string>Top</string>
+                       <string>Top Center</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QRadioButton" name="focus1to1TopLeft">
+                      <property name="text">
+                       <string>Top Left</string>
                       </property>
                      </widget>
                     </item>
@@ -2090,13 +2035,6 @@
                      <widget class="QRadioButton" name="focus1to1Center">
                       <property name="text">
                        <string>Center</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QRadioButton" name="focus1to1Cursor">
-                      <property name="text">
-                       <string>At cursor</string>
                       </property>
                      </widget>
                     </item>
@@ -2121,7 +2059,7 @@
                      <string notr="true">SNoteText</string>
                     </property>
                     <property name="text">
-                     <string>Part of image that's focused after switching to 1:1</string>
+                     <string>Starting point when a 1:1 image exceeds the window</string>
                     </property>
                    </widget>
                   </item>
@@ -2167,21 +2105,9 @@
                      <number>0</number>
                     </property>
                     <item>
-                     <widget class="QCheckBox" name="expandImageCheckBox">
-                      <property name="sizePolicy">
-                       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize">
-                       <size>
-                        <width>0</width>
-                        <height>0</height>
-                       </size>
-                      </property>
+                     <widget class="QLabel" name="expandImageLabel">
                       <property name="text">
-                       <string>Expand images, up to:</string>
+                       <string>Expand image:</string>
                       </property>
                      </widget>
                     </item>
@@ -2203,13 +2129,16 @@
                        <number>0</number>
                       </property>
                       <property name="maximum">
-                       <number>4</number>
+                       <number>14</number>
                       </property>
-                      <property name="pageStep">
+                      <property name="singleStep">
                        <number>1</number>
                       </property>
-                      <property name="value">
+                      <property name="pageStep">
                        <number>2</number>
+                      </property>
+                      <property name="value">
+                       <number>0</number>
                       </property>
                       <property name="orientation">
                        <enum>Qt::Horizontal</enum>
@@ -2218,7 +2147,14 @@
                        <enum>QSlider::TicksBelow</enum>
                       </property>
                       <property name="tickInterval">
-                       <number>1</number>
+                       <number>2</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QCheckBox" name="alwaysExpandCheckBox">
+                      <property name="text">
+                       <string>always expand</string>
                       </property>
                      </widget>
                     </item>
@@ -5172,22 +5108,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </hints>
   </connection>
   <connection>
-   <sender>autoResizeLimitSlider</sender>
-   <signal>valueChanged(int)</signal>
-   <receiver>SettingsDialog</receiver>
-   <slot>onAutoResizeLimitSliderChanged(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>389</x>
-     <y>258</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>705</x>
-     <y>0</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>videoPlaybackCheckBox</sender>
    <signal>toggled(bool)</signal>
    <receiver>videoPlaybackGroupContents</receiver>
@@ -5396,22 +5316,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </hints>
   </connection>
   <connection>
-   <sender>expandImageCheckBox</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>expandImagesGroupContents</receiver>
-   <slot>setEnabled(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>289</x>
-     <y>104</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>289</x>
-     <y>104</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>sideBar2</sender>
    <signal>entrySelected(int)</signal>
    <receiver>stackedWidget</receiver>
@@ -5486,7 +5390,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <slot>saveSettings()</slot>
   <slot>editShortcut()</slot>
   <slot>editShortcut(int)</slot>
-  <slot>onAutoResizeLimitSliderChanged(int)</slot>
   <slot>resetZoomLevels()</slot>
   <slot>onMouseScrollingSpeedSliderChanged(int)</slot>
  </slots>

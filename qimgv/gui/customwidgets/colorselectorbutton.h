@@ -13,6 +13,7 @@ public:
     void setColor(QColor &newColor);
     QColor color();
     void setDescription(QString text);
+    void setAlphaEnabled(bool enabled);
 
 protected:
     void paintEvent(QPaintEvent *e);
@@ -23,6 +24,7 @@ private slots:
 private:
     QColor mColor;
     QString mDescription;
+    bool mAlphaEnabled = false;
 };
 
 #endif // COLORSELECTORBUTTON_H

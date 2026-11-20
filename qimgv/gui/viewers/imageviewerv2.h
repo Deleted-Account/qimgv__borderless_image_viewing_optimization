@@ -20,6 +20,8 @@ enum MouseInteractionState {
     MOUSE_DRAG_BEGIN,
     MOUSE_DRAG,
     MOUSE_PAN,
+    MOUSE_PAN_BOTH,
+    MOUSE_WINDOW_MOVE_BEGIN,
     MOUSE_ZOOM,
     MOUSE_WHEEL_ZOOM
 };
@@ -56,9 +58,15 @@ public:
     void pauseResume();
     void enableDrags();
     void disableDrags();
+    void setFitUpdatesEnabled(bool enabled);
+    void applyCurrentFitMode();
+    void centerForZoom();
+    void setDisplayScale(float scale);
 
 signals:
     void scalingRequested(QSize, ScalingFilter);
+    void zoomResizeRequested(QSize);
+    void nativeFitRequested(QSize);
     void scaleChanged(qreal);
     void sourceSizeChanged(QSize);
     void imageAreaChanged(QRect);
@@ -123,6 +131,8 @@ private slots:
     void scrollToX(int x);
     void scrollToY(int y);
     void centerOnPixmap();
+    void applyCropAlignment();
+    void syncPixmapItemOffset();
     void onScrollTimelineFinished();
 
     void onDPRChanged();
@@ -137,7 +147,7 @@ private:
     QPoint mouseMoveStartPos, mousePressPos, drawPos;
     bool transparencyGrid, expandImage,    smoothAnimatedImages,
          smoothUpscaling,  forceFastScale, keepFitMode,
-         loopPlayback,     mIsFullscreen,  scrollBarWorkaround,
+         loopPlayback,     mIsFullscreen,
          useFixedZoomLevels, trackpadDetection;
     QList<float> zoomLevels;
     MouseInteractionState mouseInteraction;
@@ -154,8 +164,10 @@ private:
 
     bool dragsEnabled = true;
     bool wayland = false;
+    bool mFitUpdatesEnabled = true;
 
     float zoomStep = 0.1, dpr;
+    float mDisplayScale = 1.0f;
     float minScale, maxScale, fitWindowScale, fitWindowStretchScale, expandLimit, lockedScale;
     QPointF savedViewportPos;
     ViewLockMode mViewLock;

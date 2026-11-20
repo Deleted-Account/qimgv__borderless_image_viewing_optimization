@@ -1,5 +1,16 @@
 #include "mainwindow.h"
 
+FloatingWidgetPosition MW::infoPositionFromIndex(int index) {
+    switch(index) {
+        case 1: return TOP;
+        case 2: return TOPRIGHT;
+        case 3: return BOTTOMLEFT;
+        case 4: return BOTTOM;
+        case 5: return BOTTOMRIGHT;
+        default: return TOPLEFT;
+    }
+}
+
 // TODO: nuke this and rewrite
 
 MW::MW(QWidget *parent)
@@ -11,6 +22,7 @@ MW::MW(QWidget *parent)
       saveOverlay(nullptr),
       renameOverlay(nullptr),
       infoBarFullscreen(nullptr),
+      windowedInfoBarOverlay(nullptr),
       imageInfoOverlay(nullptr),
       floatingMessage(nullptr),
       cropPanel(nullptr),
@@ -37,10 +49,28 @@ MW::MW(QWidget *parent)
     this->setAccessibleName("mainwindow");
     windowGeometryChangeTimer.setSingleShot(true);
     windowGeometryChangeTimer.setInterval(30);
+    mZoomResizeTimer.setSingleShot(true);
+    mZoomResizeTimer.setInterval(16);
+    mWindowedInfoTimer.setSingleShot(true);
+    mWindowedInfoTimer.setInterval(5000);
     setupUi();
 
     connect(settings, &Settings::settingsChanged, this, &MW::readSettings);
     connect(&windowGeometryChangeTimer, &QTimer::timeout, this, &MW::onWindowGeometryChanged);
+    connect(&mZoomResizeTimer, &QTimer::timeout, this, [this]() {
+        if(mPendingZoomResizeSize.isEmpty())
+            return;
+        QSize size = mPendingZoomResizeSize;
+        mPendingZoomResizeSize = QSize();
+        viewerWidget->setFitUpdatesEnabled(false);
+        applyAutoResize(size);
+        viewerWidget->setFitUpdatesEnabled(true);
+        viewerWidget->centerForZoom();
+    });
+    connect(&mWindowedInfoTimer, &QTimer::timeout, this, [this]() {
+        if(windowedInfoBarOverlay)
+            windowedInfoBarOverlay->hide();
+    });
     connect(this, &MW::fullscreenStateChanged, this, &MW::adaptToWindowState);
 
     readSettings();
@@ -72,11 +102,15 @@ void MW::setupUi() {
     layout.addWidget(centralWidget.get());
     controlsOverlay = new ControlsOverlay(docWidget.get());
     infoBarFullscreen = new FullscreenInfoOverlayProxy(viewerWidget.get());
+    windowedInfoBarOverlay = new FullscreenInfoOverlayProxy(viewerWidget.get());
+    windowedInfoBarOverlay->setWindowedStyle(true);
     sidePanel = new SidePanel(this);
     layout.addWidget(sidePanel);
     imageInfoOverlay = new ImageInfoOverlayProxy(viewerWidget.get());
     floatingMessage = new FloatingMessageProxy(viewerWidget.get()); // todo: use additional one for folderview?
     connect(viewerWidget.get(), &ViewerWidget::scalingRequested, this, &MW::scalingRequested);
+    connect(viewerWidget.get(), &ViewerWidget::zoomResizeRequested, this, &MW::resizeForZoom);
+    connect(viewerWidget.get(), &ViewerWidget::nativeFitRequested, this, &MW::resizeForNativeFit);
     connect(viewerWidget.get(), &ViewerWidget::draggedOut, this, qOverload<>(&MW::draggedOut));
     connect(viewerWidget.get(), &ViewerWidget::playbackFinished, this, &MW::playbackFinished);
     connect(viewerWidget.get(), &ViewerWidget::showScriptSettings, this, &MW::showScriptSettings);
@@ -107,6 +141,7 @@ void MW::setupFullUi() {
     docWidget->setupMainPanel();
     infoBarWindowed->init();
     infoBarFullscreen->init();
+    windowedInfoBarOverlay->init();
 }
 
 void MW::setupCropPanel() {
@@ -220,51 +255,148 @@ void MW::closeImage() {
     viewerWidget->closeImage();
 }
 
-// todo: fix flicker somehow
-// ideally it should change img & resize in one go
-void MW::preShowResize(QSize sz) {
-    auto screens = qApp->screens();
-    if(this->windowState() != Qt::WindowNoState || !screens.count() || screens.count() <= currentDisplay)
+void MW::applyAutoResize(QSize logicalSize) {
+    if(mApplyingAutoResize)
         return;
-    int decorationSize = frameGeometry().height() - height();
-    float maxSzMulti = settings->autoResizeLimit() / 100.f;
-    QRect availableGeom = screens.at(currentDisplay)->availableGeometry();
-    QSize maxSz = availableGeom.size() * maxSzMulti;
-    maxSz.setHeight(maxSz.height() - decorationSize);
-    if(!sz.isEmpty()) {
-        if(sz.width() > maxSz.width() || sz.height() > maxSz.height())
-            sz.scale(maxSz, Qt::KeepAspectRatio);
-    } else {
-        sz = maxSz;
+    if(!settings->autoResizeWindow())
+        return;
+    if(!isVisible()) {
+        mPendingAutoResizeSize = logicalSize;
+        return;
     }
-    QRect newGeom(0,0, sz.width(), sz.height());
-    newGeom.moveCenter(availableGeom.center());
-    newGeom.translate(0, decorationSize / 2);
+    if(windowState() != Qt::WindowNoState || isFullScreen() || isMaximized())
+        return;
 
-    if(this->isVisible())
-        setGeometry(newGeom);
-    else // setGeometry wont work on hidden windows, so we just save for it to be restored later
-        settings->setWindowGeometry(newGeom);
-    qApp->processEvents(); // not needed anymore with patched qt?
+    QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+    if(!screen)
+        return;
+    QRect available = screen->availableGeometry();
+    QRect frameRect = frameGeometry();
+    QRect clientRect = geometry();
+    QMargins frame(qMax(0, clientRect.left() - frameRect.left()),
+                   qMax(0, clientRect.top() - frameRect.top()),
+                   qMax(0, frameRect.right() - clientRect.right()),
+                   qMax(0, frameRect.bottom() - clientRect.bottom()));
+
+    QSizeF area(available.width() - frame.left() - frame.right(),
+                available.height() - frame.top() - frame.bottom());
+    QSizeF image = logicalSize.isEmpty() ? area : QSizeF(logicalSize);
+
+    int scaleX2 = settings->expandScaleX2();
+    qreal limit = scaleX2 / 2.0f;
+    qreal scale = 1.0f;
+    if(limit > 0 && image.width() > 0 && image.height() > 0) {
+        if(settings->alwaysExpand()) {
+            scale = qMin(limit, qMin(area.width() / image.width(), area.height() / image.height()));
+        } else {
+            qreal intLimit = qFloor(limit);
+            qreal fitX = qFloor(area.width() / image.width());
+            qreal fitY = qFloor(area.height() / image.height());
+            scale = qMin(intLimit, qMin(fitX, fitY));
+        }
+        if(scale < 1.0f)
+            scale = 1.0f;
+    }
+
+    QSizeF desired = image * scale;
+    bool cropMode = settings->imageFitMode() == FIT_ORIGINAL;
+    QSizeF finalSize;
+    if(cropMode) {
+        finalSize.setWidth(qMin(desired.width(), area.width()));
+        finalSize.setHeight(qMin(desired.height(), area.height()));
+    } else {
+        qreal fit = qMin(1.0f, qMin(area.width() / desired.width(), area.height() / desired.height()));
+        finalSize = desired * fit;
+    }
+    viewerWidget->setDisplayScale(static_cast<float>(scale));
+
+    QSize clientSize = finalSize.toSize().expandedTo(QSize(1, 1));
+    QSize frameSize(clientSize.width() + frame.left() + frame.right(),
+                    clientSize.height() + frame.top() + frame.bottom());
+    QRect newFrame(QPoint(0, 0), frameSize);
+    newFrame.moveCenter(available.center());
+    QRect newClient(newFrame.left() + frame.left(), newFrame.top() + frame.top(),
+                    clientSize.width(), clientSize.height());
+
+    mApplyingAutoResize = true;
+    setGeometry(newClient);
+    mApplyingAutoResize = false;
+}
+
+void MW::resizeForZoom(QSize logicalSize) {
+    if(logicalSize.isEmpty())
+        return;
+    mPendingZoomResizeSize = logicalSize;
+    if(!mZoomResizeTimer.isActive())
+        mZoomResizeTimer.start();
+}
+
+void MW::resizeForNativeFit(QSize logicalSize) {
+    if(logicalSize.isEmpty() || mApplyingAutoResize)
+        return;
+    if(windowState() != Qt::WindowNoState || isFullScreen() || isMaximized())
+        return;
+
+    QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+    if(!screen)
+        return;
+    QRect available = screen->availableGeometry();
+    if(logicalSize.width() <= available.width() && logicalSize.height() <= available.height())
+        return;
+
+    QRect frameRect = frameGeometry();
+    QRect clientRect = geometry();
+    QMargins frame(qMax(0, clientRect.left() - frameRect.left()),
+                   qMax(0, clientRect.top() - frameRect.top()),
+                   qMax(0, frameRect.right() - clientRect.right()),
+                   qMax(0, frameRect.bottom() - clientRect.bottom()));
+
+    QSize clientSize(available.width() - frame.left() - frame.right(),
+                     available.height() - frame.top() - frame.bottom());
+    QSize frameSize(clientSize.width() + frame.left() + frame.right(),
+                    clientSize.height() + frame.top() + frame.bottom());
+    QRect newFrame(QPoint(0, 0), frameSize);
+    newFrame.moveCenter(available.center());
+    QRect newClient(newFrame.left() + frame.left(), newFrame.top() + frame.top(),
+                    clientSize.width(), clientSize.height());
+
+    viewerWidget->setDisplayScale(1.0f);
+    mApplyingAutoResize = true;
+    setGeometry(newClient);
+    mApplyingAutoResize = false;
 }
 
 void MW::showImage(std::unique_ptr<QPixmap> pixmap) {
-    if(settings->autoResizeWindow())
-        preShowResize(pixmap->size());
-    viewerWidget->showImage(std::move(pixmap));
+    if(pixmap) {
+        qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
+        pixmap->setDevicePixelRatio(dpr);
+        QSize logicalSize = pixmap->deviceIndependentSize().toSize();
+        viewerWidget->setFitUpdatesEnabled(false);
+        applyAutoResize(logicalSize);
+        viewerWidget->showImage(std::move(pixmap));
+        viewerWidget->setFitUpdatesEnabled(true);
+        viewerWidget->applyCurrentFitMode();
+    }
     updateCropPanelData();
 }
 
 void MW::showAnimation(std::shared_ptr<QMovie> movie) {
-    if(settings->autoResizeWindow())
-        preShowResize(movie->frameRect().size());
-    viewerWidget->showAnimation(movie);
+    if(movie) {
+        qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
+        QSize logicalSize = QSizeF(movie->frameRect().size() / dpr).toSize();
+        viewerWidget->setFitUpdatesEnabled(false);
+        applyAutoResize(logicalSize);
+        viewerWidget->showAnimation(movie);
+        viewerWidget->setFitUpdatesEnabled(true);
+        viewerWidget->applyCurrentFitMode();
+    }
     updateCropPanelData();
 }
 
 void MW::showVideo(QString file) {
-    if(settings->autoResizeWindow())
-        preShowResize(QSize()); // tmp. find a way to get this though mpv BEFORE playback
+    viewerWidget->setFitUpdatesEnabled(false);
+    applyAutoResize(QSize());
+    viewerWidget->setFitUpdatesEnabled(true);
     viewerWidget->showVideo(file);
 }
 
@@ -405,9 +537,13 @@ void MW::saveWindowGeometry() {
 
 // does not apply fullscreen; window size / maximized state only
 void MW::restoreWindowGeometry() {
-    this->setGeometry(settings->windowGeometry());
-    if(settings->maximizedWindow())
+    if(!settings->autoResizeWindow())
+        this->setGeometry(settings->windowGeometry());
+    if(settings->maximizedWindow() && !settings->autoResizeWindow()) {
         this->setWindowState(Qt::WindowMaximized);
+    } else {
+        maximized = false;
+    }
     updateCurrentDisplay();
 }
 
@@ -662,6 +798,16 @@ void MW::showWindowed() {
         QWidget::showNormal();
     restoreWindowGeometry();
     QWidget::show();
+    if(!mPendingAutoResizeSize.isEmpty() && settings->autoResizeWindow()) {
+        showNormal();
+        qApp->processEvents();
+        QSize size = mPendingAutoResizeSize;
+        mPendingAutoResizeSize = QSize();
+        viewerWidget->setFitUpdatesEnabled(false);
+        applyAutoResize(size);
+        viewerWidget->setFitUpdatesEnabled(true);
+        viewerWidget->applyCurrentFitMode();
+    }
     // try to repaint sooner
     qApp->processEvents();
     emit fullscreenStateChanged(false);
@@ -813,10 +959,12 @@ void MW::onInfoUpdated() {
     if(centralWidget->currentViewMode() == MODE_FOLDERVIEW) {
         windowTitle = tr("Folder view");
         infoBarFullscreen->setInfo("", tr("No file opened."), "");
+        windowedInfoBarOverlay->setInfo("", tr("No file opened."), "");
         infoBarWindowed->setInfo("", tr("No file opened."), "");
     } else if(info.fileName.isEmpty()) {
         windowTitle = qApp->applicationName();
         infoBarFullscreen->setInfo("", tr("No file opened."), "");
+        windowedInfoBarOverlay->setInfo("", tr("No file opened."), "");
         infoBarWindowed->setInfo("", tr("No file opened."), "");
     } else {
         windowTitle = info.fileName;
@@ -845,9 +993,19 @@ void MW::onInfoUpdated() {
             windowTitle.prepend("* ");
 
         infoBarFullscreen->setInfo(posString, info.fileName + (info.edited ? "  *" : ""), resString + "  " + sizeString);
+        windowedInfoBarOverlay->setInfo(posString, info.fileName + (info.edited ? "  *" : ""), resString + "  " + sizeString);
         infoBarWindowed->setInfo(posString, info.fileName + (info.edited ? "  *" : ""), resString + "  " + sizeString + " " + states);
     }
     setWindowTitle(windowTitle);
+
+    if(!isFullScreen() && settings->windowedInfoBar()) {
+        if(info.filePath != mLastWindowedInfoPath) {
+            windowedInfoBarOverlay->show();
+            mLastWindowedInfoPath = info.filePath;
+        }
+        if(!settings->windowedInfoBarAlways())
+            mWindowedInfoTimer.start();
+    }
 }
 
 // TODO!!! buffer this in mw
@@ -959,6 +1117,8 @@ void MW::adaptToWindowState() {
     if(isFullScreen()) { //-------------------------------------- fullscreen ---
         applyFullscreenBackground();
         infoBarWindowed->hide();
+        mWindowedInfoTimer.stop();
+        windowedInfoBarOverlay->hide();
 
         if(showInfoBarFullscreen)
             infoBarFullscreen->showWhenReady();
@@ -973,6 +1133,18 @@ void MW::adaptToWindowState() {
     } else { //------------------------------------------------------ window ---
         applyWindowedBackground();
         infoBarFullscreen->hide();
+
+        windowedInfoBarOverlay->setPosition(infoPositionFromIndex(settings->windowedInfoBarPosition()));
+        if(settings->windowedInfoBar()) {
+            windowedInfoBarOverlay->show();
+            if(settings->windowedInfoBarAlways())
+                mWindowedInfoTimer.stop();
+            else
+                mWindowedInfoTimer.start();
+        } else {
+            mWindowedInfoTimer.stop();
+            windowedInfoBarOverlay->hide();
+        }
 
         if(showInfoBarWindowed)
             infoBarWindowed->show();

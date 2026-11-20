@@ -33,6 +33,8 @@ ViewerWidget::ViewerWidget(QWidget *parent)
     imageViewer->hide();
 
     connect(imageViewer.get(), &ImageViewerV2::scalingRequested, this, &ViewerWidget::scalingRequested);
+    connect(imageViewer.get(), &ImageViewerV2::zoomResizeRequested, this, &ViewerWidget::zoomResizeRequested);
+    connect(imageViewer.get(), &ImageViewerV2::nativeFitRequested, this, &ViewerWidget::nativeFitRequested);
     connect(imageViewer.get(), &ImageViewerV2::scaleChanged, this, &ViewerWidget::onScaleChanged);
     connect(imageViewer.get(), &ImageViewerV2::playbackFinished, this, &ViewerWidget::onAnimationPlaybackFinished);
     connect(this, &ViewerWidget::toggleTransparencyGrid, imageViewer.get(), &ImageViewerV2::toggleTransparencyGrid);
@@ -207,6 +209,26 @@ void ViewerWidget::setInteractionEnabled(bool mode) {
 
 bool ViewerWidget::interactionEnabled() {
     return mInteractionEnabled;
+}
+
+void ViewerWidget::setFitUpdatesEnabled(bool enabled) {
+    if(imageViewer)
+        imageViewer->setFitUpdatesEnabled(enabled);
+}
+
+void ViewerWidget::applyCurrentFitMode() {
+    if(imageViewer)
+        imageViewer->applyCurrentFitMode();
+}
+
+void ViewerWidget::centerForZoom() {
+    if(imageViewer)
+        imageViewer->centerForZoom();
+}
+
+void ViewerWidget::setDisplayScale(float scale) {
+    if(imageViewer)
+        imageViewer->setDisplayScale(scale);
 }
 
 bool ViewerWidget::showImage(std::unique_ptr<QPixmap> pixmap) {

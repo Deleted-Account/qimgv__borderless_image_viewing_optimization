@@ -71,6 +71,8 @@ public:
     void showImage(std::unique_ptr<QPixmap> pixmap);
     void showAnimation(std::shared_ptr<QMovie> movie);
     void showVideo(QString file);
+    void resizeForZoom(QSize logicalSize);
+    void resizeForNativeFit(QSize logicalSize);
 
     void setCurrentInfo(int fileIndex, int fileCount, QString filePath, QString fileName, QSize imageSize, qint64 fileSize, bool slideshow, bool shuffle, bool edited);
     void setExifInfo(QMap<QString, QString>);
@@ -107,6 +109,7 @@ private:
 
     ControlsOverlay *controlsOverlay;
     FullscreenInfoOverlayProxy *infoBarFullscreen;
+    FullscreenInfoOverlayProxy *windowedInfoBarOverlay;
     std::shared_ptr<InfoBarProxy> infoBarWindowed;
     FloatingMessageProxy *floatingMessage;
 
@@ -129,8 +132,17 @@ private:
     void setupCopyOverlay();
     void setupSaveOverlay();
     void setupRenameOverlay();
-    void preShowResize(QSize sz);
+    void applyAutoResize(QSize logicalSize);
+    static FloatingWidgetPosition infoPositionFromIndex(int index);
     void setInteractionEnabled(bool mode);
+
+    bool mApplyingAutoResize = false;
+    bool mSuppressViewerFit = false;
+    QString mLastWindowedInfoPath = QStringLiteral("<unset>");
+    QSize mPendingAutoResizeSize;
+    QSize mPendingZoomResizeSize;
+    QTimer mZoomResizeTimer;
+    QTimer mWindowedInfoTimer;
 
 private slots:
     void updateCurrentDisplay();

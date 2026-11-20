@@ -26,6 +26,10 @@ public:
 
     void setInteractionEnabled(bool mode);
     bool interactionEnabled();
+    void setFitUpdatesEnabled(bool enabled);
+    void applyCurrentFitMode();
+    void centerForZoom();
+    void setDisplayScale(float scale);
 
     bool showImage(std::unique_ptr<QPixmap> pixmap);
     bool showAnimation(std::shared_ptr<QMovie> movie);
@@ -67,6 +71,8 @@ private slots:
 
 signals:
     void scalingRequested(QSize, ScalingFilter);
+    void zoomResizeRequested(QSize);
+    void nativeFitRequested(QSize);
     void zoomIn();
     void zoomOut();
     void zoomInCursor();
