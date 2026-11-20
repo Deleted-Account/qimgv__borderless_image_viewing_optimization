@@ -19,3 +19,20 @@ release/
 *.user
 ui_settingsdialog.h
 Makefile
+
+# Local build output
+/build/
+/build-*/
+/.build-deps/
+
+# CMake / tool-generated files
+/CMakeUserPresets.json
+/compile_commands.json
+
+# Logs and local temporary files
+*.log
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
