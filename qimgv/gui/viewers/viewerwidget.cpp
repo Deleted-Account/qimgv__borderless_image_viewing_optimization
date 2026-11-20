@@ -574,10 +574,23 @@ void ViewerWidget::showContextMenu(QPoint pos) {
 void ViewerWidget::onFullscreenModeChanged(bool mode) {
     imageViewer->onFullscreenModeChanged(mode);
     mIsFullscreen = mode;
+    updateZoomIndicatorPosition();
+}
+
+void ViewerWidget::updateZoomIndicatorPosition() {
+    if(mIsFullscreen || !settings->windowedInfoBar()) {
+        zoomIndicator->setPosition(FloatingWidgetPosition::BOTTOMLEFT);
+        return;
+    }
+    int pos = settings->windowedInfoBarPosition();
+    zoomIndicator->setPosition(pos >= 3 && pos <= 5
+                               ? FloatingWidgetPosition::TOPLEFT
+                               : FloatingWidgetPosition::BOTTOMLEFT);
 }
 
 void ViewerWidget::readSettings() {
     videoControls->onVideoMuted(!settings->playVideoSounds());
+    updateZoomIndicatorPosition();
     if(settings->clickableEdges()) {
         imageViewer->viewport()->installEventFilter(this);
         videoPlayer->installEventFilter(this);

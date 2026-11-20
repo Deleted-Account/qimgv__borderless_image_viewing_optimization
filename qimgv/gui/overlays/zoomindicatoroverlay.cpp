@@ -13,7 +13,7 @@ ZoomIndicatorOverlay::ZoomIndicatorOverlay(FloatingWidgetContainer *parent) : Ov
     this->setLayout(&layout);
     this->setPosition(FloatingWidgetPosition::BOTTOMLEFT);
     setHorizontalMargin(0);
-    setVerticalMargin(16);
+    setVerticalMargin(0);
 
     setFadeEnabled(true);
     setFadeDuration(300);

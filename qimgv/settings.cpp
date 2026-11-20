@@ -938,15 +938,15 @@ void Settings::setWindowedInfoBarAlways(bool mode) {
 //------------------------------------------------------------------------------
 int Settings::windowedInfoBarPosition() {
     int index = settings->settingsConf->value("windowedInfoBarPosition", 0).toInt();
-    switch(index) {
-        case 1: return 1; // Top
-        case 2: return 2; // Top Right
-        case 5: return 3; // Bottom Left
-        case 6: return 4; // Bottom
-        case 7: return 5; // Bottom Right
-        case 4: return 2; // old Right -> Top Right
-        default: return 0; // Top Left, and removed options
-    }
+    if(index < 0)
+        return 0;
+    if(index <= 5)
+        return index;
+    if(index == 6)
+        return 4; // legacy Bottom
+    if(index == 7)
+        return 5; // legacy Bottom Right
+    return 0;
 }
 
 void Settings::setWindowedInfoBarPosition(int index) {

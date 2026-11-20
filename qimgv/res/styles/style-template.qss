@@ -720,15 +720,15 @@ InfoBar QLabel {
 
 /*----------------------------------------------------------------------------*/
 ZoomIndicatorOverlay {
-    background-color: %overlay_rgba%;
-    border-color: %overlay_rgba%;
+    background-color: %windowed_info_bg%;
+    border-color: %windowed_info_bg%;
     border-left: 0px;
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
 }
 
 ZoomIndicatorOverlay QLabel {
-    color: %overlay_text%;
+    color: %windowed_info_text%;
 }
 
 /*----------------------------------------------------------------------------*/

@@ -34,9 +34,16 @@ void ZoomIndicatorOverlayProxy::setScale(qreal scale) {
     }
 }
 
+void ZoomIndicatorOverlayProxy::setPosition(FloatingWidgetPosition pos) {
+    stateBuf.position = pos;
+    if(overlay)
+        overlay->setPosition(pos);
+}
+
 void ZoomIndicatorOverlayProxy::init() {
     if(overlay)
         return;
     overlay = new ZoomIndicatorOverlay(container);
+    overlay->setPosition(stateBuf.position);
     overlay->setScale(stateBuf.scale);
 }

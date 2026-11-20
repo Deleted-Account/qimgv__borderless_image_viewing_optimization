@@ -59,6 +59,7 @@ private:
 
     void disableImageViewer();
     void disableVideoPlayer();
+    void updateZoomIndicatorPosition();
 
     QRect videoControlsArea();
 
