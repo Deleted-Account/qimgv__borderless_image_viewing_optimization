@@ -30,6 +30,10 @@ public:
     void applyCurrentFitMode();
     void centerForZoom();
     void setDisplayScale(float scale);
+    void setAutoScaleActive(bool enabled);
+    float displayScale();
+    QSize logicalSourceSize();
+    QSize viewportSize();
     void refreshZoomIndicator();
 
     bool showImage(std::unique_ptr<QPixmap> pixmap);
@@ -75,6 +79,8 @@ signals:
     void scalingRequested(QSize, ScalingFilter);
     void zoomResizeRequested(QSize);
     void nativeFitRequested(QSize);
+    void manualScaleOverride();
+    void animationFrameChanged(int);
     void zoomIn();
     void zoomOut();
     void zoomInCursor();

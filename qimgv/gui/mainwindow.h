@@ -133,11 +133,15 @@ private:
     void setupSaveOverlay();
     void setupRenameOverlay();
     void applyAutoResize(QSize logicalSize);
+    float computeDisplayScale(QSizeF logicalSize, QSizeF available, bool cropMode) const;
+    void recomputeAutoScale();
     static FloatingWidgetPosition infoPositionFromIndex(int index);
     void setInteractionEnabled(bool mode);
 
     bool mApplyingAutoResize = false;
     bool mSuppressViewerFit = false;
+    bool mAutoScaleActive = false;
+    QSize mAutoScaleLogicalSize;
     QString mLastWindowedInfoPath = QStringLiteral("<unset>");
     QSize mPendingAutoResizeSize;
     QSize mPendingZoomResizeSize;
@@ -150,6 +154,8 @@ private slots:
     void adaptToWindowState();
     void onWindowGeometryChanged();
     void onInfoUpdated();
+    void onManualScaleOverride();
+    void onAnimationFrameChanged(int frame);
     void showScriptSettings();
 
 protected:

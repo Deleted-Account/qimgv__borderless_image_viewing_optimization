@@ -224,6 +224,24 @@ void ImageViewerV2::setDisplayScale(float scale) {
     mDisplayScale = scale > 0 ? scale : 1.0f;
 }
 
+void ImageViewerV2::setAutoScaleActive(bool enabled) {
+    mUseDisplayScale = enabled;
+}
+
+float ImageViewerV2::displayScale() const {
+    return mDisplayScale;
+}
+
+QSize ImageViewerV2::logicalSourceSize() const {
+    if(!pixmap)
+        return QSize();
+    return pixmap->deviceIndependentSize().toSize();
+}
+
+QSize ImageViewerV2::viewportSize() const {
+    return viewport()->size();
+}
+
 
 void ImageViewerV2::onAnimationTimer() {
     if(!movie)
@@ -815,6 +833,7 @@ void ImageViewerV2::mouseMoveZoom(QMouseEvent *event) {
     int moveDistance = mouseMoveStartPos.y() - currentPos;
     float newScale = currentScale() * (1.0f + stepMultiplier * moveDistance * dpr);
     mouseMoveStartPos = event->pos();
+    emit manualScaleOverride();
     imageFitMode = FIT_FREE;
 
     zoomAnchored(newScale);
@@ -898,6 +917,10 @@ void ImageViewerV2::fitWidth() {
 void ImageViewerV2::fitWindow() {
     if(!pixmap)
         return;
+    if(mUseDisplayScale) {
+        fitNormal();
+        return;
+    }
     if(imageFits() && !expandImage) {
         fitNormal();
     } else {
@@ -912,7 +935,11 @@ void ImageViewerV2::fitWindow() {
 void ImageViewerV2::fitNormal() {
     if(!pixmap)
         return;
+    float oldMinScale = minScale;
+    if(mDisplayScale < minScale)
+        minScale = mDisplayScale;
     doZoom(mDisplayScale);
+    minScale = oldMinScale;
     applyCropAlignment();
 }
 
@@ -995,6 +1022,7 @@ void ImageViewerV2::setFitMode(ImageFitMode newMode) {
 
 // public, sends scale request
 void ImageViewerV2::setFitOriginal() {
+    emit manualScaleOverride();
     mDisplayScale = 1.0f;
     if(pixmap && !pixmap->isNull())
         emit nativeFitRequested(pixmap->deviceIndependentSize().toSize());
@@ -1003,18 +1031,21 @@ void ImageViewerV2::setFitOriginal() {
 
 // public, sends scale request
 void ImageViewerV2::setFitWidth() {
+    emit manualScaleOverride();
     setFitMode(FIT_WIDTH);
     requestScaling();
 }
 
 // public, sends scale request
 void ImageViewerV2::setFitWindow() {
+    emit manualScaleOverride();
     setFitMode(FIT_WINDOW);
     requestScaling();
 }
 
 // public, sends scale request
 void ImageViewerV2::setFitWindowStretch() {
+    emit manualScaleOverride();
     setFitMode(FIT_WINDOW_STRETCH);
     requestScaling();
 }
@@ -1183,6 +1214,7 @@ void ImageViewerV2::zoomInCursor() {
 }
 
 void ImageViewerV2::doZoomIn(bool atCursor) {
+    emit manualScaleOverride();
     if(atCursor && underMouse())
         setZoomAnchor(mapFromGlobal(cursor().pos()));
     else
@@ -1224,6 +1256,7 @@ void ImageViewerV2::zoomOutCursor() {
 }
 
 void ImageViewerV2::doZoomOut(bool atCursor) {
+    emit manualScaleOverride();
     if(atCursor && underMouse())
         setZoomAnchor(mapFromGlobal(cursor().pos()));
     else

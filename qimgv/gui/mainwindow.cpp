@@ -111,6 +111,8 @@ void MW::setupUi() {
     connect(viewerWidget.get(), &ViewerWidget::scalingRequested, this, &MW::scalingRequested);
     connect(viewerWidget.get(), &ViewerWidget::zoomResizeRequested, this, &MW::resizeForZoom);
     connect(viewerWidget.get(), &ViewerWidget::nativeFitRequested, this, &MW::resizeForNativeFit);
+    connect(viewerWidget.get(), &ViewerWidget::manualScaleOverride, this, &MW::onManualScaleOverride);
+    connect(viewerWidget.get(), &ViewerWidget::animationFrameChanged, this, &MW::onAnimationFrameChanged);
     connect(viewerWidget.get(), &ViewerWidget::draggedOut, this, qOverload<>(&MW::draggedOut));
     connect(viewerWidget.get(), &ViewerWidget::playbackFinished, this, &MW::playbackFinished);
     connect(viewerWidget.get(), &ViewerWidget::showScriptSettings, this, &MW::showScriptSettings);
@@ -243,16 +245,58 @@ void MW::fitWindowStretch() {
 // switch between 1:1 and Fit All
 // TODO: move to viewerWidget?
 void MW::switchFitMode() {
+    onManualScaleOverride();
     if(viewerWidget->fitMode() == FIT_WINDOW)
         viewerWidget->setFitMode(FIT_ORIGINAL);
     else
         viewerWidget->setFitMode(FIT_WINDOW);
 }
 
+void MW::onManualScaleOverride() {
+    mAutoScaleActive = false;
+    viewerWidget->setAutoScaleActive(false);
+}
+
+void MW::onAnimationFrameChanged(int) {
+    recomputeAutoScale();
+}
+
 void MW::closeImage() {
     info.fileName = "";
     info.filePath = "";
     viewerWidget->closeImage();
+}
+
+float MW::computeDisplayScale(QSizeF logicalSize, QSizeF available, bool cropMode) const {
+    if(logicalSize.isEmpty() || available.isEmpty() || logicalSize.width() <= 0 || logicalSize.height() <= 0)
+        return 1.0f;
+
+    int scaleX2 = settings->expandScaleX2();
+    qreal limit = scaleX2 / 2.0f;
+    qreal expandScale = 1.0f;
+    if(limit > 0) {
+        if(settings->alwaysExpand()) {
+            expandScale = qMin(limit, qMin(available.width() / logicalSize.width(),
+                                          available.height() / logicalSize.height()));
+        } else {
+            qreal intLimit = qFloor(limit);
+            qreal fitX = qFloor(available.width() / logicalSize.width());
+            qreal fitY = qFloor(available.height() / logicalSize.height());
+            expandScale = qMin(intLimit, qMin(fitX, fitY));
+        }
+        if(expandScale < 1.0f)
+            expandScale = 1.0f;
+    }
+
+    if(cropMode)
+        return static_cast<float>(expandScale);
+
+    QSizeF desired = logicalSize * expandScale;
+    if(desired.isEmpty() || desired.width() <= 0 || desired.height() <= 0)
+        return static_cast<float>(expandScale);
+    qreal fit = qMin(1.0f, qMin(available.width() / desired.width(),
+                                      available.height() / desired.height()));
+    return static_cast<float>(expandScale * fit);
 }
 
 void MW::applyAutoResize(QSize logicalSize) {
@@ -281,34 +325,22 @@ void MW::applyAutoResize(QSize logicalSize) {
     QSizeF area(available.width() - frame.left() - frame.right(),
                 available.height() - frame.top() - frame.bottom());
     QSizeF image = logicalSize.isEmpty() ? area : QSizeF(logicalSize);
-
-    int scaleX2 = settings->expandScaleX2();
-    qreal limit = scaleX2 / 2.0f;
-    qreal scale = 1.0f;
-    if(limit > 0 && image.width() > 0 && image.height() > 0) {
-        if(settings->alwaysExpand()) {
-            scale = qMin(limit, qMin(area.width() / image.width(), area.height() / image.height()));
-        } else {
-            qreal intLimit = qFloor(limit);
-            qreal fitX = qFloor(area.width() / image.width());
-            qreal fitY = qFloor(area.height() / image.height());
-            scale = qMin(intLimit, qMin(fitX, fitY));
-        }
-        if(scale < 1.0f)
-            scale = 1.0f;
-    }
-
-    QSizeF desired = image * scale;
     bool cropMode = settings->imageFitMode() == FIT_ORIGINAL;
+    qreal scale = computeDisplayScale(image, area, cropMode);
+    QSizeF desired = image * scale;
     QSizeF finalSize;
     if(cropMode) {
         finalSize.setWidth(qMin(desired.width(), area.width()));
         finalSize.setHeight(qMin(desired.height(), area.height()));
     } else {
-        qreal fit = qMin(1.0f, qMin(area.width() / desired.width(), area.height() / desired.height()));
-        finalSize = desired * fit;
+        finalSize = desired;
     }
-    viewerWidget->setDisplayScale(static_cast<float>(scale));
+
+    if(mAutoScaleActive) {
+        mAutoScaleLogicalSize = image.toSize();
+        viewerWidget->setAutoScaleActive(true);
+        viewerWidget->setDisplayScale(static_cast<float>(scale));
+    }
 
     QSize clientSize = finalSize.toSize().expandedTo(QSize(1, 1));
     QSize frameSize(clientSize.width() + frame.left() + frame.right(),
@@ -321,6 +353,28 @@ void MW::applyAutoResize(QSize logicalSize) {
     mApplyingAutoResize = true;
     setGeometry(newClient);
     mApplyingAutoResize = false;
+}
+
+void MW::recomputeAutoScale() {
+    if(!mAutoScaleActive || mApplyingAutoResize || !settings->autoResizeWindow())
+        return;
+
+    QSize logicalSize = viewerWidget->logicalSourceSize();
+    if(logicalSize.isEmpty())
+        logicalSize = mAutoScaleLogicalSize;
+    QSize viewport = viewerWidget->viewportSize();
+    if(logicalSize.isEmpty() || viewport.isEmpty())
+        return;
+
+    QSizeF area(viewport.width(), viewport.height());
+    bool cropMode = settings->imageFitMode() == FIT_ORIGINAL;
+    float scale = computeDisplayScale(logicalSize, area, cropMode);
+    if(qAbs(scale - viewerWidget->displayScale()) < 0.01f)
+        return;
+
+    viewerWidget->setDisplayScale(scale);
+    viewerWidget->applyCurrentFitMode();
+    viewerWidget->refreshZoomIndicator();
 }
 
 void MW::resizeForZoom(QSize logicalSize) {
@@ -374,6 +428,11 @@ void MW::showImage(std::unique_ptr<QPixmap> pixmap) {
         qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
         pixmap->setDevicePixelRatio(dpr);
         QSize logicalSize = pixmap->deviceIndependentSize().toSize();
+        if(settings->autoResizeWindow()) {
+            mAutoScaleLogicalSize = logicalSize;
+            mAutoScaleActive = true;
+            viewerWidget->setAutoScaleActive(true);
+        }
         viewerWidget->setFitUpdatesEnabled(false);
         applyAutoResize(logicalSize);
         viewerWidget->showImage(std::move(pixmap));
@@ -387,6 +446,11 @@ void MW::showAnimation(std::shared_ptr<QMovie> movie) {
     if(movie) {
         qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
         QSize logicalSize = QSizeF(movie->frameRect().size() / dpr).toSize();
+        if(settings->autoResizeWindow()) {
+            mAutoScaleLogicalSize = logicalSize;
+            mAutoScaleActive = true;
+            viewerWidget->setAutoScaleActive(true);
+        }
         viewerWidget->setFitUpdatesEnabled(false);
         applyAutoResize(logicalSize);
         viewerWidget->showAnimation(movie);
@@ -659,6 +723,7 @@ void MW::resizeEvent(QResizeEvent *event) {
         cropOverlay->setImageDrawRect(viewerWidget->imageRect());
     }
     FloatingWidgetContainer::resizeEvent(event);
+    recomputeAutoScale();
 }
 
 void MW::showDefault() {
@@ -1160,6 +1225,7 @@ void MW::adaptToWindowState() {
     folderView->onFullscreenModeChanged(isFullScreen());
     docWidget->onFullscreenModeChanged(isFullScreen());
     viewerWidget->onFullscreenModeChanged(isFullScreen());
+    recomputeAutoScale();
 }
 
 void MW::paintEvent(QPaintEvent *event) {

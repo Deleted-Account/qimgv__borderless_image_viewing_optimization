@@ -62,12 +62,17 @@ public:
     void applyCurrentFitMode();
     void centerForZoom();
     void setDisplayScale(float scale);
+    void setAutoScaleActive(bool enabled);
+    float displayScale() const;
+    QSize logicalSourceSize() const;
+    QSize viewportSize() const;
 
 signals:
     void scalingRequested(QSize, ScalingFilter);
     void zoomResizeRequested(QSize);
     void nativeFitRequested(QSize);
     void scaleChanged(qreal);
+    void manualScaleOverride();
     void sourceSizeChanged(QSize);
     void imageAreaChanged(QRect);
     void draggedOut();
@@ -165,6 +170,7 @@ private:
     bool dragsEnabled = true;
     bool wayland = false;
     bool mFitUpdatesEnabled = true;
+    bool mUseDisplayScale = false;
 
     float zoomStep = 0.1, dpr;
     float mDisplayScale = 1.0f;

@@ -193,6 +193,8 @@ Implemented in source and compiled into `build-full`:
 - `alwaysExpand` controls whether half-stops are selectable and whether the final scale may be fractional.
 - Fit UI is reduced to one `Crop oversized image (1:1)` checkbox; it maps to `FIT_ORIGINAL` vs `FIT_WINDOW`.
 - Window sizing on image switch follows the formulas in section 3.
+- A single `displayScale` computed in `MW` is authoritative for image display. With crop off, `MW` applies the section 3 shrink factor to the scale itself; with crop on, the scale is left uncropped and the window is clamped instead. `FIT_WINDOW` uses this scale during automatic image switching instead of recomputing `viewport / pixmap` in the viewer. The old viewer-side `fitWindowScale` remains only for manual `Fit in window` actions.
+- Manual zoom / Fit actions and right-click `1:1` switch to a manual scale source. Fullscreen transitions, window resizes, settings changes and GIF frame-size changes recompute the automatic scale only while the auto source is active.
 - `FIT_ORIGINAL` uses the externally computed display scale and the `Focus in 1:1 mode` placement from section 4.1.
 - Preferences → View offers `Top Center`, `Top Left`, `Center` for `Focus in 1:1 mode`; `At cursor` was removed. Right-click `1:1` uses this setting at native 1x even when the crop checkbox is off.
 - Mouse wheel pans when `FIT_ORIGINAL` image exceeds the viewport.

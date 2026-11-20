@@ -36,6 +36,8 @@ ViewerWidget::ViewerWidget(QWidget *parent)
     connect(imageViewer.get(), &ImageViewerV2::zoomResizeRequested, this, &ViewerWidget::zoomResizeRequested);
     connect(imageViewer.get(), &ImageViewerV2::nativeFitRequested, this, &ViewerWidget::nativeFitRequested);
     connect(imageViewer.get(), &ImageViewerV2::scaleChanged, this, &ViewerWidget::onScaleChanged);
+    connect(imageViewer.get(), &ImageViewerV2::manualScaleOverride, this, &ViewerWidget::manualScaleOverride);
+    connect(imageViewer.get(), &ImageViewerV2::frameChanged, this, &ViewerWidget::animationFrameChanged);
     connect(imageViewer.get(), &ImageViewerV2::playbackFinished, this, &ViewerWidget::onAnimationPlaybackFinished);
     connect(this, &ViewerWidget::toggleTransparencyGrid, imageViewer.get(), &ImageViewerV2::toggleTransparencyGrid);
     connect(this, &ViewerWidget::setFilterNearest,       imageViewer.get(), &ImageViewerV2::setFilterNearest);
@@ -230,6 +232,23 @@ void ViewerWidget::centerForZoom() {
 void ViewerWidget::setDisplayScale(float scale) {
     if(imageViewer)
         imageViewer->setDisplayScale(scale);
+}
+
+void ViewerWidget::setAutoScaleActive(bool enabled) {
+    if(imageViewer)
+        imageViewer->setAutoScaleActive(enabled);
+}
+
+float ViewerWidget::displayScale() {
+    return imageViewer ? imageViewer->displayScale() : 1.0f;
+}
+
+QSize ViewerWidget::logicalSourceSize() {
+    return imageViewer ? imageViewer->logicalSourceSize() : QSize();
+}
+
+QSize ViewerWidget::viewportSize() {
+    return imageViewer ? imageViewer->viewportSize() : QSize();
 }
 
 void ViewerWidget::refreshZoomIndicator() {
