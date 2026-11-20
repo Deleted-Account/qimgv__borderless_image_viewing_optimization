@@ -229,6 +229,7 @@ void SettingsDialog::readSettings() {
     ui->windowedInfoTextModeComboBox->setCurrentIndex(savedText.isEmpty() ? 0 : 1);
     ui->windowedInfoTextButton->setColor(infoText);
     ui->windowedInfoTextButton->setEnabled(!savedText.isEmpty());
+    ui->closeContextMenuOnFitChangeCheckBox->setChecked(settings->closeContextMenuOnFitChange());
     ui->showExtendedInfoTitle->setChecked(settings->windowTitleExtendedInfo());
     ui->cursorAutohideCheckBox->setChecked(settings->cursorAutohide());
     if(settings->focusPointIn1to1Mode() == FOCUS_TOP_CENTER)
@@ -366,6 +367,7 @@ void SettingsDialog::saveSettings() {
         ui->windowedInfoTextModeComboBox->currentIndex() == 1
         ? ui->windowedInfoTextButton->color().name(QColor::HexArgb)
         : QString());
+    settings->setCloseContextMenuOnFitChange(ui->closeContextMenuOnFitChangeCheckBox->isChecked());
     settings->setWindowTitleExtendedInfo(ui->showExtendedInfoTitle->isChecked());
     settings->setCursorAutohide(ui->cursorAutohideCheckBox->isChecked());
     if(ui->focus1to1TopCenter->isChecked())

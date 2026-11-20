@@ -198,6 +198,9 @@ public:
     QString windowedInfoBarText();
     void setWindowedInfoBarText(QString color);
 
+    bool closeContextMenuOnFitChange();
+    void setCloseContextMenuOnFitChange(bool mode);
+
     bool windowTitleExtendedInfo();
     void setWindowTitleExtendedInfo(bool mode);
 

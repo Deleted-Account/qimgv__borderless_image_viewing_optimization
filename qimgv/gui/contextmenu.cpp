@@ -150,7 +150,24 @@ void ContextMenu::setImageEntriesEnabled(bool mode) {
     ui->showLocation->setEnabled(mode);
 }
 
+void ContextMenu::readSettings() {
+    bool enabled = settings->closeContextMenuOnFitChange();
+    ActionButton *buttons[] = {ui->fitWindow, ui->fitWidth,
+                               ui->fitWindowStretch, ui->zoomOriginal};
+    for(ActionButton *button : buttons) {
+        if(enabled)
+            connect(button, &IconButton::clicked, this, &ContextMenu::closeOnFitClicked, Qt::UniqueConnection);
+        else
+            disconnect(button, &IconButton::clicked, this, &ContextMenu::closeOnFitClicked);
+    }
+}
+
+void ContextMenu::closeOnFitClicked() {
+    hide();
+}
+
 void ContextMenu::showAt(QPoint pos) {
+    readSettings();
     switchToMainPage();
     QRect geom = geometry();
     geom.moveTopLeft(pos);

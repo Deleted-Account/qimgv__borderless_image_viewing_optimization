@@ -969,6 +969,14 @@ void Settings::setWindowedInfoBarText(QString color) {
     settings->settingsConf->setValue("windowedInfoBarText", color);
 }
 //------------------------------------------------------------------------------
+bool Settings::closeContextMenuOnFitChange() {
+    return settings->settingsConf->value("closeContextMenuOnFitChange", true).toBool();
+}
+
+void Settings::setCloseContextMenuOnFitChange(bool mode) {
+    settings->settingsConf->setValue("closeContextMenuOnFitChange", mode);
+}
+//------------------------------------------------------------------------------
 bool Settings::windowTitleExtendedInfo() {
     return settings->settingsConf->value("windowTitleExtendedInfo", true).toBool();
 }

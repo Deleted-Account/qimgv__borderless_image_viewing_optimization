@@ -21,6 +21,7 @@ public:
 public slots:
     void showAt(QPoint pos);
     void setGeometry(QRect geom);
+    void readSettings();
 
 private:
     Ui::ContextMenu *ui;
@@ -38,4 +39,5 @@ protected:
 private slots:
     void switchToMainPage();
     void switchToScriptsPage();
+    void closeOnFitClicked();
 };

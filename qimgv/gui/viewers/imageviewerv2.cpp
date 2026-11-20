@@ -318,8 +318,8 @@ void ImageViewerV2::showAnimation(std::shared_ptr<QMovie> _movie) {
         emit frameChanged(0);
 
         updateMinScale();
-        if(!keepFitMode || imageFitMode == FIT_FREE)
-            imageFitMode = imageFitModeDefault;
+        imageFitMode = imageFitModeDefault;
+        savedViewportPos = QPointF(0.5, 0.5);
 
         if(mViewLock == LOCK_NONE) {
             applyFitMode();
@@ -349,8 +349,8 @@ void ImageViewerV2::showImage(std::unique_ptr<QPixmap> _pixmap) {
         pixmapItem.show();
         updateMinScale();
 
-        if(!keepFitMode || imageFitMode == FIT_FREE)
-            imageFitMode = imageFitModeDefault;
+        imageFitMode = imageFitModeDefault;
+        savedViewportPos = QPointF(0.5, 0.5);
 
         if(mViewLock == LOCK_NONE) {
             applyFitMode();

@@ -351,8 +351,11 @@ void MW::resizeForNativeFit(QSize logicalSize) {
                    qMax(0, frameRect.right() - clientRect.right()),
                    qMax(0, frameRect.bottom() - clientRect.bottom()));
 
-    QSize clientSize(available.width() - frame.left() - frame.right(),
-                     available.height() - frame.top() - frame.bottom());
+    QSizeF area(available.width() - frame.left() - frame.right(),
+                available.height() - frame.top() - frame.bottom());
+    QSizeF finalSize(qMin(static_cast<qreal>(logicalSize.width()), area.width()),
+                     qMin(static_cast<qreal>(logicalSize.height()), area.height()));
+    QSize clientSize = finalSize.toSize().expandedTo(QSize(1, 1));
     QSize frameSize(clientSize.width() + frame.left() + frame.right(),
                     clientSize.height() + frame.top() + frame.bottom());
     QRect newFrame(QPoint(0, 0), frameSize);
