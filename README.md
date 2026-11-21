@@ -41,6 +41,9 @@ Fork branch: `kde-tweaks`.
    - With `always expand` on, for example at 5x, images larger than one fifth of the available screen area use non-integer scaling.
    - Selecting `-` on the slider disables Expand, as in upstream.
 
+5. **Adjustments to the user experience for the right-click menu and its top-row buttons**
+   - Added functionality so that clicking any of the four buttons at the top of the right-click menu—excluding the `+` and `-` buttons—will immediately close the right-click menu.
+
 ## Recommended setup for the best experience
 
 1. Enable **No Titlebar and Frame** for qimgv via a KDE window rule.
