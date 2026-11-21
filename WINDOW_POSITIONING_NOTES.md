@@ -30,7 +30,7 @@ focusPointIn1to1Mode=1
 - Once the cap is reached, the window stops growing and the image may overflow the viewport. In that state, panning is done with **right button first, then left button, drag with both held**.
 - **Shift + left drag** = drag out file (DnD).
 - **Middle click** = close (existing `exit` binding).
-- No hover window buttons.
+- No custom window buttons are added.
 
 ### 2.2 Fullscreen (`isFullScreen() == true`: double-click image / `F` / `F11`, no title bar)
 

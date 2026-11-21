@@ -8,7 +8,7 @@ This document describes the behavioral and implementation differences between th
 - Fork branch: `kde-tweaks`.
 - Fork goal: make qimgv comfortable as a borderless, image-driven viewer under KDE Plasma / XWayland, with predictable window sizing, predictable `1:1` placement, and unobtrusive image information.
 
-The fork does not add a custom titlebar or hover window buttons. It is designed to be used with a KDE window rule such as **No Titlebar and Frame** for qimgv. Window movement is handled by dragging the image itself, and closing remains available via the existing middle-click binding.
+The fork adds no custom titlebar or window buttons. It is designed to be used with a KDE window rule such as **No Titlebar and Frame** for qimgv. Window movement is handled by dragging the image itself, and closing remains available via the existing middle-click binding. A windowed floating info overlay replaces the file information normally shown by the title bar / status bar.
 
 ## 1. Executive summary
 
@@ -304,7 +304,7 @@ The deployed binary is tuned for the build machine's CPU (AVX2/FMA on the develo
 
 ## 10. Non-goals and limitations
 
-- No custom titlebar and no hover min/max/close buttons were added.
+- No custom titlebar or window buttons were added.
 - KDE's **No Titlebar and Frame** rule is expected to provide the borderless look.
 - The native build is machine-specific because of `-march=native`.
 - Qt itself is not rebuilt; compiler optimizations affect qimgv and its plugin, not system Qt.

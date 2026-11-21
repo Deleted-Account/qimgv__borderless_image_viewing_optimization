@@ -2,31 +2,57 @@
 
 [中文说明](README.zh-CN.md)
 
-A KDE-oriented fork of [qimgv](https://github.com/easymodo/qimgv), tuned for borderless **No Titlebar and Frame** image viewing.
+A KDE-focused modified version of [qimgv](https://github.com/easymodo/qimgv).
 
-Based on upstream `master` at `3127a2d2` (qimgv 1.0.3). Personal fork, not affiliated with upstream.
+I call it KDE-focused because I modify and use it in a KDE desktop environment, where KDE makes it easy to enable "No Titlebar and Frame" and make qimgv completely titlebar-free and borderless.
 
-## Major UX improvements
+**This fork heavily optimizes the experience when KDE enables "No Titlebar and Frame" for qimgv by default,
+making qimgv a very pleasant — arguably the best — minimalist borderless windowed image viewer on Linux.**
 
-- **Borderless window workflow**: drag the image to move the window; middle click closes. No custom titlebar or hover buttons.
-- **Window follows the image**: predictable, DPR-correct auto-resize; centered placement; no accumulated offset; no KWin horizontal-maximize lock; fresh fit state on every image switch.
-- **Practical 1:1**: choose `Top Center`, `Top Left`, or `Center`; small images always centered; right-click `1:1` uses native 1x and only caps the overflowing axis.
-- **Quiet image info**: windowed info auto-hides after 5 seconds and returns on image change; position and colors are configurable; zoom badge moves away from bottom info and shares its colors.
-- **Faster fit switching**: the first four right-click size buttons close the menu by default.
+***本 fork 极致优化了 KDE 桌面对 qimgv 默认开启 "No Titlebar and Frame" 的使用体验，
+让 qimgv 成为 Linux 下非常好用（可能是最好用）的无边框窗口化极简主义图片浏览器。**
 
-## Best experience with
+Upstream base: `master` at `3127a2d2` (qimgv 1.0.3).
+Fork branch: `kde-tweaks`.
 
-Apply this KDE window rule to qimgv:
+## What this fork does compared with upstream
 
-```text
-No Titlebar and Frame
-```
+1. **Floating info for borderless KDE viewing**
+   - Upstream qimgv shows image information only in the title bar. With "No Titlebar and Frame" enabled, that information disappears. This fork adds a configurable, minimalist floating info overlay that hides automatically.
+   - The info overlay shows the image index, filename, resolution, and size. It reappears when switching images and hides automatically after 5 seconds.
+   - Its position and colors can be adjusted in Preferences → View, with alpha-channel support.
+     It can also be set to stay visible. The zoom badge was also adjusted and automatically moves to the other side depending on the info position.
+
+2. **Left-drag the image to move the borderless window**
+   - With **No Titlebar and Frame** enabled, there is no title bar to grab. KDE's default `Meta + left drag` works, but it is a bit cumbersome.
+     This fork lets you move the window by left-dragging the image directly in windowed mode.
+
+3. **Reworked image switching and oversized-image layout**
+   - Upstream: after switching images, where the new image opens depends on the existing state. This fork centers the window on every image switch.
+   - For images larger than the available area, enable `Crop oversized image (1:1)` and choose the render starting point from `Top Center`, `Top Left`, or `Center`.
+   - The right-click `1:1` action uses the same positioning logic as `Crop oversized image (1:1)`;
+     even when Crop is unchecked, right-click `1:1` returns to native 1x and follows that preset.
+
+4. **More control over Expand image and better screen use**
+   - With `always expand` off, images are always enlarged by integer multiples. If a small image cannot be enlarged to the configured multiple,
+     it falls back to the largest integer multiple that fits.
+   - With `always expand` on, for example at 5x, images larger than one fifth of the available screen area use non-integer scaling.
+   - Selecting `-` on the slider disables Expand, as in upstream.
+
+## Recommended setup for the best experience
+
+1. Enable **No Titlebar and Frame** for qimgv via a KDE window rule.
+2. In qimgv, under Preferences → View:
+   - enable `Crop oversized image (1:1)`
+   - choose `Top Center`
+   - turn `always expand` on or off according to preference
 
 ## Docs
 
 - [Full comparison with upstream](FORK_DIFFERENCES.md)
 - [与原版的完整差异](FORK_DIFFERENCES.zh-CN.md)
 - [Architecture](ARCHITECTURE.md)
+- [Push policy](PUSH_POLICY.md)
 
 ## License
 
