@@ -42,7 +42,7 @@ Fork branch: `kde-tweaks`.
    - Selecting `-` on the slider disables Expand, as in upstream.
 
 5. **Adjustments to the user experience for the right-click menu and its top-row buttons**
-   - Added functionality so that clicking any of the four buttons at the top of the right-click menu—excluding the `+` and `-` buttons—will immediately close the right-click menu.
+   - Added functionality so that clicking any of the four buttons at the top of the right-click menu, excluding the `+` and `-` buttons, will immediately close the right-click menu.
 
 ## Recommended setup for the best experience
 
