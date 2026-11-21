@@ -2,14 +2,16 @@
 
 [中文说明](README.zh-CN.md)
 
-A KDE-focused modified version of [qimgv](https://github.com/easymodo/qimgv).
+A modified version of [qimgv](https://github.com/easymodo/qimgv) tailored for KDE.
+I describe it as "tailored for KDE" because I developed and use it within the KDE desktop environment;
+KDE makes it easy to enable the "No Titlebar and Frame" setting, allowing qimgv to run completely free of title bars and window borders.
 
-I call it KDE-focused because I modify and use it in a KDE desktop environment, where KDE makes it easy to enable "No Titlebar and Frame" and make qimgv completely titlebar-free and borderless.
+While users on other Linux desktop environments can certainly benefit from the changes in this fork, the best possible experience is achieved by enabling "borderless window" mode—specific to your chosen desktop environment for qimgv.
 
-**This fork heavily optimizes the experience when KDE enables "No Titlebar and Frame" for qimgv by default,
-making qimgv a very pleasant — arguably the best — minimalist borderless windowed image viewer on Linux.**
+**This fork is highly optimized for a "No Titlebar and Frame" setup within KDE,
+making qimgv an exceptionally good (arguably the best) minimalist, borderless image viewer for Linux.**
 
-***本 fork 极致优化了 KDE 桌面对 qimgv 默认开启 "No Titlebar and Frame" 的使用体验，
+✔**本 fork 极致优化了 KDE 桌面对 qimgv 默认开启 "No Titlebar and Frame" 的使用体验，
 让 qimgv 成为 Linux 下非常好用（可能是最好用）的无边框窗口化极简主义图片浏览器。**
 
 Upstream base: `master` at `3127a2d2` (qimgv 1.0.3).
