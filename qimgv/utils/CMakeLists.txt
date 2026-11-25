@@ -2,6 +2,7 @@
 
 target_sources(qimgv PRIVATE
     actions.cpp
+    archivepath.cpp
     cmdoptionsrunner.cpp
     imagefactory.cpp
     imagelib.cpp

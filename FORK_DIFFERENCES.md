@@ -27,6 +27,7 @@ The fork adds no custom titlebar or window buttons. It is designed to be used wi
 | Zoom badge | Bottom-left with bottom margin; theme overlay colors | Flush to corner; moves to top-left when windowed info is at the bottom; uses windowed info colors |
 | Context-menu fit buttons | Menu stays open | First four fit buttons can close the menu immediately (default on) |
 | Build/deploy | Generic release build | Optional native CPU build with AVX2/FMA-targeted code and LTO; local deployment helper |
+| Archives | Not supported | Open zip/cbz/7z/cb7/rar/cbr/tar directly and browse images inside, read-only |
 
 ## 2. Window sizing and image fit model
 
@@ -295,14 +296,79 @@ sudo ./deploy-system.sh
 
 The deployed binary is tuned for the build machine's CPU (AVX2/FMA on the development host). It is not intended to be copied to unrelated machines.
 
-## 9. Documentation added
+## 9. Viewing images inside archives
+
+Upstream only browses image files on disk. This fork can open an archive as an image source.
+
+### 9.1 Scope
+
+- Extensions: `zip`, `cbz`, `7z`, `cb7`, `rar`, `cbr`, `tar`.
+- Backed by libarchive. Enabled only when libarchive is found at configure time, exposed as `USE_ARCHIVE`; the feature degrades safely otherwise.
+- Only images are indexed: entries are filtered by the image suffixes Qt supports, so videos inside the archive (e.g. `mp4`) never appear in the list.
+
+### 9.2 Virtual paths
+
+Inner files use a virtual path:
+
+```text
+/absolute/path/archive.cbz::sub/inner.png
+```
+
+- `::` is the separator;
+- the path doubles as `FSEntry.path`, cache key, `state.currentFilePath`, and `DocumentInfo::filePath()`;
+- sorting and uniqueness use the full inner path; the UI shows only the basename.
+
+### 9.3 UI behavior
+
+- Opening an archive enters document view and browses with `[i/n]`;
+- windowed info shows only the inner basename, index and uncompressed size — never the archive name;
+- leaving the archive reuses `goUp` (parent / Backspace) and returns to the archive's directory.
+
+### 9.4 Read-only policy
+
+Only **file-level writes** are blocked:
+
+- blocked: save, save as, delete, move to trash, rename, copy, move, drag-out (including `Shift` drag-out), `cropAndSave`;
+- allowed but never persisted: crop, rotate, flip, resize (preview only);
+- allowed: set as wallpaper, copy image to clipboard.
+
+### 9.5 Passwords
+
+- encrypted archives prompt for a password, up to 3 attempts;
+- cancel or repeated failure exits with an error;
+- the password is kept in memory only, never written to config or disk;
+- archives using an undecryptable scheme report "encryption method not supported".
+
+Tested support matrix (libarchive 3.8.7):
+
+| Format / encryption | Password support |
+|---|---|
+| zip / cbz, ZipCrypto | yes |
+| zip / cbz, AES-128/256 | yes |
+| 7z / cb7, data encryption | no |
+| 7z / cb7, header encryption (`-mhe=on`) | no |
+| rar, RAR4 data/header encryption | no |
+| rar5, encrypted | untested (theoretically supported by libarchive) |
+| tar | no encryption concept |
+
+Only the zip family can actually be unlocked with a password. For 7z and RAR4 the limitation is in libarchive, not in this fork.
+
+No external-extractor fallback is used: Ark is only a GUI shell over `7z`/`unrar`/libarchive with no reusable library API; driving `7z` CLI adds processes, text parsing, and exposes the password via the command line (`/proc/<pid>/cmdline`), while Fedora's 7-Zip build drops RAR support anyway.
+
+### 9.6 Caching
+
+- up to 4 archive indexes, invalidated by source `mtime`/size;
+- extracted image data uses a 3-entry LRU;
+- libarchive reads are serialized to avoid concurrent reads of the same archive.
+
+## 10. Documentation added
 
 - `ARCHITECTURE.md` — concise onboarding architecture overview.
 - `WINDOW_SCALING_CONSENSUS.md` — behavior contract for window sizing, fit modes, focus placement, and panning.
 - `WINDOW_POSITIONING_NOTES.md` — design discussion notes that led to the window positioning rewrite.
 - `FORK_DIFFERENCES.md` and `FORK_DIFFERENCES.zh-CN.md` — this document.
 
-## 10. Non-goals and limitations
+## 11. Non-goals and limitations
 
 - No custom titlebar or window buttons were added.
 - KDE's **No Titlebar and Frame** rule is expected to provide the borderless look.

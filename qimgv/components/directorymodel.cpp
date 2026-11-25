@@ -178,6 +178,15 @@ bool DirectoryModel::setDirectory(QString path) {
     return dirManager.setDirectory(path);
 }
 
+bool DirectoryModel::mountArchive(QString archivePath) {
+    cache.clear();
+    return dirManager.mountArchive(archivePath);
+}
+
+bool DirectoryModel::archiveHasEncryptedEntries() const {
+    return dirManager.archiveHasEncryptedEntries();
+}
+
 void DirectoryModel::unload(int index) {
     QString filePath = this->filePathAt(index);
     cache.remove(filePath);

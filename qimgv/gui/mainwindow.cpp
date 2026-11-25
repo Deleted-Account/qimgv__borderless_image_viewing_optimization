@@ -790,6 +790,7 @@ void MW::showOpenDialog(QString path) {
     QFileDialog dialog(this);
     QStringList imageFilter;
     imageFilter.append(settings->supportedFormatsFilter());
+    imageFilter.append("Archives (*.zip *.cbz *.7z *.cb7 *.rar *.cbr *.tar)");
     imageFilter.append("All Files (*)");
     dialog.setDirectory(path);
     dialog.setNameFilters(imageFilter);

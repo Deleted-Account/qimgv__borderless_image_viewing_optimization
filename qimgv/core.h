@@ -70,6 +70,8 @@ private:
     void rotateByDegrees(int degrees);
     void reset();
     bool setDirectory(QString path);
+    bool loadArchive(QString archivePath);
+    bool archiveReadOnly();
 
     QDrag *mDrag;
     QMimeData *getMimeDataForImage(std::shared_ptr<Image> img, MimeDataTarget target);

@@ -1,6 +1,7 @@
 ## SOURCES FOR QIMGV COMPONENTS
 
 target_sources(qimgv PRIVATE
+    archive/archivebackend.cpp
     directorymodel.cpp
     directorypresenter.cpp
 

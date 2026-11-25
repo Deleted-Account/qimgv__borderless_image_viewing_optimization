@@ -1,4 +1,7 @@
 #include "documentinfo.h"
+#include "utils/archivepath.h"
+#include "components/archive/archivebackend.h"
+#include <QBuffer>
 
 DocumentInfo::DocumentInfo(QString path)
     : mDocumentType(DocumentType::NONE),
@@ -6,6 +9,10 @@ DocumentInfo::DocumentInfo(QString path)
       mFormat(""),
       exifLoaded(false)
 {
+    if(ArchivePath::isArchivePath(path)) {
+        initArchive(path);
+        return;
+    }
     fileInfo.setFile(path);
     if(!fileInfo.isFile()) {
         qDebug() << "FileInfo: cannot open: " << path;
@@ -22,24 +29,42 @@ DocumentInfo::~DocumentInfo() {
 // ##############################################################
 
 QString DocumentInfo::directoryPath() const {
+    if(mArchive)
+        return QFileInfo(mArchivePath).absolutePath();
     return fileInfo.absolutePath();
 }
 
 QString DocumentInfo::filePath() const {
+    if(mArchive)
+        return mVirtualPath;
     return fileInfo.absoluteFilePath();
 }
 
 QString DocumentInfo::fileName() const {
+    if(mArchive)
+        return QFileInfo(mInnerPath).fileName();
     return fileInfo.fileName();
 }
 
 QString DocumentInfo::baseName() const {
+    if(mArchive)
+        return QFileInfo(mInnerPath).baseName();
     return fileInfo.baseName();
 }
 
 // bytes
 qint64 DocumentInfo::fileSize() const {
+    if(mArchive)
+        return mArchiveSize;
     return fileInfo.size();
+}
+
+bool DocumentInfo::isArchive() const {
+    return mArchive;
+}
+
+QByteArray DocumentInfo::archiveData() const {
+    return mArchiveData;
 }
 
 DocumentType DocumentInfo::type() const {
@@ -55,12 +80,16 @@ QString DocumentInfo::format() const {
 }
 
 QDateTime DocumentInfo::lastModified() const {
+    if(mArchive)
+        return mArchiveModified;
     return fileInfo.lastModified();
 }
 
 // For cases like orientation / even mimetype change we just reload
 // Image from scratch, so don`t bother handling it here
 void DocumentInfo::refresh() {
+    if(mArchive)
+        return;
     fileInfo.refresh();
 }
 
@@ -122,6 +151,104 @@ void DocumentInfo::detectFormat() {
             mDocumentType = DocumentType::STATIC;
     }
     loadExifOrientation();
+}
+
+void DocumentInfo::initArchive(const QString &virtualPath) {
+    mArchive = true;
+    mVirtualPath = virtualPath;
+    if(!ArchivePath::split(virtualPath, mArchivePath, mInnerPath)) {
+        qDebug() << "DocumentInfo: invalid archive path: " << virtualPath;
+        return;
+    }
+
+    ArchiveEntry entry;
+    if(!ArchiveBackend::instance()->entryInfo(mArchivePath, mInnerPath, entry)) {
+        qDebug() << "DocumentInfo: cannot stat archive entry: " << virtualPath;
+        return;
+    }
+    mArchiveSize = entry.size;
+    mArchiveModified = entry.modified;
+
+    if(!ArchiveBackend::instance()->readEntry(mArchivePath, mInnerPath, mArchiveData)) {
+        qDebug() << "DocumentInfo: cannot read archive entry: " << virtualPath;
+        return;
+    }
+
+    detectFormatFromData();
+}
+
+void DocumentInfo::detectFormatFromData() {
+    if(mDocumentType != DocumentType::NONE)
+        return;
+    QMimeDatabase mimeDb;
+    mMimeType = mimeDb.mimeTypeForData(mArchiveData);
+    auto mimeName = mMimeType.name().toUtf8();
+    auto suffix = QFileInfo(mInnerPath).suffix().toLower().toUtf8();
+    if(mimeName == "image/jpeg") {
+        mFormat = "jpg";
+        mDocumentType = DocumentType::STATIC;
+    } else if(mimeName == "image/png") {
+        if(QImageReader::supportedImageFormats().contains("apng") && detectAPNGData()) {
+            mFormat = "apng";
+            mDocumentType = DocumentType::ANIMATED;
+        } else {
+            mFormat = "png";
+            mDocumentType = DocumentType::STATIC;
+        }
+    } else if(mimeName == "image/gif") {
+        mFormat = "gif";
+        mDocumentType = DocumentType::ANIMATED;
+    } else if(mimeName == "image/webp" || (mimeName == "audio/x-riff" && suffix == "webp")) {
+        mFormat = "webp";
+        mDocumentType = detectAnimatedWebPData() ? DocumentType::ANIMATED : DocumentType::STATIC;
+    } else if(mimeName == "image/jxl") {
+        mFormat = "jxl";
+        mDocumentType = detectAnimatedJxlData() ? DocumentType::ANIMATED : DocumentType::STATIC;
+        if(mDocumentType == DocumentType::ANIMATED && !settings->jxlAnimation()) {
+            mDocumentType = DocumentType::NONE;
+            qDebug() << "animated jxl is off; skipping file";
+        }
+    } else if(mimeName == "image/avif") {
+        mFormat = "avif";
+        mDocumentType = detectAnimatedAvifData() ? DocumentType::ANIMATED : DocumentType::STATIC;
+    } else if(mimeName == "image/bmp") {
+        mFormat = "bmp";
+        mDocumentType = DocumentType::STATIC;
+    } else {
+        // archives never contain playable videos; fall back to suffix
+        mFormat = suffix;
+        if(mFormat.compare("jfif", Qt::CaseInsensitive) == 0)
+            mFormat = "jpg";
+        mDocumentType = DocumentType::STATIC;
+    }
+    loadExifOrientation();
+}
+
+bool DocumentInfo::detectAPNGData() {
+    return mArchiveData.left(120).contains("acTL");
+}
+
+bool DocumentInfo::detectAnimatedWebPData() {
+    if(mArchiveData.size() < 21)
+        return false;
+    if(mArchiveData.mid(12, 4) != "VP8X")
+        return false;
+    const char flags = mArchiveData.at(20);
+    return (flags & (1 << 1)) != 0;
+}
+
+bool DocumentInfo::detectAnimatedAvifData() {
+    if(mArchiveData.size() < 12)
+        return false;
+    return mArchiveData.mid(4, 8) == "ftypavis";
+}
+
+bool DocumentInfo::detectAnimatedJxlData() {
+    QByteArray data = mArchiveData;
+    QBuffer buffer(&data);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer, "jxl");
+    return reader.supportsAnimation();
 }
 
 inline
@@ -193,7 +320,12 @@ void DocumentInfo::loadExifTags() {
     try {
         std::unique_ptr<Exiv2::Image> image;
 
-        image = Exiv2::ImageFactory::open(toStdString(fileInfo.filePath()));
+        if(mArchive)
+            image = Exiv2::ImageFactory::open(
+                reinterpret_cast<const Exiv2::byte*>(mArchiveData.constData()),
+                static_cast<size_t>(mArchiveData.size()));
+        else
+            image = Exiv2::ImageFactory::open(toStdString(fileInfo.filePath()));
 
         assert(image.get() != 0);
         image->readMetadata();
@@ -300,6 +432,16 @@ QMap<QString, QString> DocumentInfo::getExifTags() {
 void DocumentInfo::loadExifOrientation() {
     if(mDocumentType == DocumentType::VIDEO || mDocumentType == DocumentType::NONE)
         return;
+
+    if(mArchive) {
+        QByteArray data = mArchiveData;
+        QBuffer buffer(&data);
+        buffer.open(QIODevice::ReadOnly);
+        QImageReader reader(&buffer, mFormat.toLatin1());
+        if(reader.canRead())
+            mOrientation = static_cast<int>(reader.transformation());
+        return;
+    }
 
     QString path = filePath();
     QImageReader *reader = nullptr;

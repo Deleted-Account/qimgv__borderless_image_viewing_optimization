@@ -39,6 +39,8 @@ public:
     void removeDir(const QString &dirPath, bool trash, bool recursive, FileOpResult &result);
 
     bool setDirectory(QString);
+    bool mountArchive(QString archivePath);
+    bool archiveHasEncryptedEntries() const;
 
     void unload(int index);
 

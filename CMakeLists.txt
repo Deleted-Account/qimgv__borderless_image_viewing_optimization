@@ -73,6 +73,14 @@ if(OPENCV_SUPPORT)
     find_package(OpenCV REQUIRED core imgproc)
 endif()
 
+# optional archive (zip/cbz/7z/cb7/rar/cbr/tar) support
+find_package(LibArchive QUIET)
+if(LibArchive_FOUND)
+    message(STATUS "libarchive: enabled")
+else()
+    message(STATUS "libarchive: not found, archive viewing disabled")
+endif()
+
 ##############################################################
 
 add_subdirectory(qimgv)

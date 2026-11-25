@@ -3,6 +3,9 @@
 #include "image.h"
 #include <QMovie>
 #include <QTimer>
+#include <QBuffer>
+#include <QByteArray>
+#include <memory>
 
 class ImageAnimated : public Image {
 public:
@@ -33,5 +36,7 @@ private:
     QSize mSize;
     int mFrameCount;
     std::shared_ptr<QMovie> movie;
+    QByteArray mData;
+    std::unique_ptr<QBuffer> mBuffer;
     void loadMovie();
 };

@@ -6,6 +6,10 @@
  */
 
 #include "core.h"
+#include "utils/archivepath.h"
+#include "components/archive/archivebackend.h"
+#include <QInputDialog>
+#include <QLineEdit>
 
 #ifdef __WIN32
 #include <tchar.h>
@@ -347,6 +351,8 @@ void Core::close() {
 }
 
 void Core::removePermanent() {
+    if(archiveReadOnly())
+        return;
     auto paths = currentSelection();
     if(!paths.count())
         return;
@@ -381,6 +387,8 @@ void Core::removePermanent() {
 }
 
 void Core::moveToTrash() {
+    if(archiveReadOnly())
+        return;
     auto paths = currentSelection();
     if(!paths.count())
         return;
@@ -583,6 +591,8 @@ void Core::onDraggedOut() {
 void Core::onDraggedOut(QList<QString> paths) {
     if(paths.isEmpty())
         return;
+    if(archiveReadOnly())
+        return;
     QMimeData *mimeData;
     // single selection, image
     if(paths.count() == 1 && model->containsFile(paths.first())) {
@@ -604,6 +614,8 @@ void Core::onDraggedOut(QList<QString> paths) {
 QMimeData *Core::getMimeDataForImage(std::shared_ptr<Image> img, MimeDataTarget target) {
     QMimeData* mimeData = new QMimeData();
     if(!img)
+        return mimeData;
+    if(target == TARGET_DROP && ArchivePath::isArchivePath(img->filePath()))
         return mimeData;
     QString path = img->filePath();
     if(img->type() == STATIC) {
@@ -635,6 +647,8 @@ void Core::setFoldersDisplay(bool mode) {
 }
 
 void Core::renameCurrentSelection(QString newName) {
+    if(archiveReadOnly())
+        return;
     if(!model->fileCount() || newName.isEmpty() || selectedPath().isEmpty())
         return;
     FileOpResult result;
@@ -897,14 +911,20 @@ void Core::doInteractiveMove(QString path, QString destDirectory, DialogResult &
 // -----------------------------------------------------------------------------------
 
 void Core::copyPathsTo(QList<QString> paths, QString destDirectory) {
+    if(archiveReadOnly())
+        return;
     interactiveCopy(paths, destDirectory);
 }
 
 void Core::movePathsTo(QList<QString> paths, QString destDirectory) {
+    if(archiveReadOnly())
+        return;
     interactiveMove(paths, destDirectory);
 }
 
 void Core::moveCurrentFile(QString destDirectory) {
+    if(archiveReadOnly())
+        return;
     if(model->isEmpty())
         return;
     // pause updates to avoid flicker
@@ -930,6 +950,8 @@ void Core::moveCurrentFile(QString destDirectory) {
 }
 
 void Core::copyCurrentFile(QString destDirectory) {
+    if(archiveReadOnly())
+        return;
     if(model->isEmpty())
         return;
     FileOpResult result;
@@ -959,6 +981,8 @@ void Core::toggleFullscreenInfoBar() {
 }
 
 void Core::requestSavePath() {
+    if(archiveReadOnly())
+        return;
     if(model->isEmpty())
         return;
     mw->showSaveDialog(selectedPath());
@@ -1024,6 +1048,8 @@ void Core::crop(QRect rect) {
 void Core::cropAndSave(QRect rect) {
     if(mw->currentViewMode() == MODE_FOLDERVIEW)
         return;
+    if(archiveReadOnly())
+        return;
     edit_template(false, tr("Crop"), { ImageLib::cropped }, rect);
     saveFile(selectedPath());
     updateInfoString();
@@ -1036,6 +1062,8 @@ bool Core::saveFile(const QString &filePath) {
 }
 
 bool Core::saveFile(const QString &filePath, const QString &newPath) {
+    if(archiveReadOnly())
+        return false;
     if(!model->saveFile(filePath, newPath))
         return false;
     mw->hideSaveOverlay();
@@ -1053,6 +1081,8 @@ void Core::saveCurrentFile() {
 }
 
 void Core::saveCurrentFileAs(QString destPath) {
+    if(archiveReadOnly())
+        return;
     if(model->isEmpty())
         return;
     if(saveFile(selectedPath(), destPath)) {
@@ -1216,10 +1246,25 @@ bool Core::loadPath(QString path) {
 
     stopSlideshow();
     state.delayModel = false;
+
+    if(ArchivePath::isArchivePath(path)) {
+        QString archive, inner;
+        if(!ArchivePath::split(path, archive, inner))
+            return false;
+        if(!loadArchive(archive))
+            return false;
+        int archiveIndex = model->indexOfFile(path);
+        if(archiveIndex < 0)
+            return false;
+        return loadFileIndex(archiveIndex, false, settings->usePreloader());
+    }
+
     QFileInfo fileInfo(path);
     if(fileInfo.isDir()) {
         state.directoryPath = QDir(path).absolutePath();
     } else if(fileInfo.isFile()) {
+        if(ArchivePath::isArchiveExtension(fileInfo.absoluteFilePath()))
+            return loadArchive(fileInfo.absoluteFilePath());
         state.directoryPath = fileInfo.absolutePath();
         if(model->directoryPath() != state.directoryPath)
             state.delayModel = true;
@@ -1254,6 +1299,96 @@ bool Core::loadPath(QString path) {
     }
 }
 
+bool Core::loadArchive(QString archivePath) {
+    stopSlideshow();
+    ArchiveBackend *backend = ArchiveBackend::instance();
+    archivePath = QFileInfo(archivePath).absoluteFilePath();
+
+    auto promptPassword = [this]() -> QString {
+        bool ok = false;
+        QString password = QInputDialog::getText(
+            mw,
+            tr("压缩包需要密码"),
+            tr("密码："),
+            QLineEdit::Password,
+            QString(),
+            &ok);
+        return (ok && !password.isEmpty()) ? password : QString();
+    };
+
+    int attempts = 0;
+    bool mounted = model->mountArchive(archivePath);
+    while(!mounted && backend->passwordRequired(archivePath) && attempts < 3) {
+        const QString password = promptPassword();
+        if(password.isEmpty())
+            return false;
+        backend->setPassword(archivePath, password);
+        mounted = model->mountArchive(archivePath);
+        attempts++;
+    }
+    if(!mounted) {
+        if(backend->unsupportedEncryption(archivePath)) {
+            mw->showError(tr("该压缩包的加密方式暂不支持"));
+        } else if(backend->hasPassword(archivePath) && backend->passwordRequired(archivePath)) {
+            mw->showError(tr("密码错误或该压缩包不支持解密"));
+            backend->clearPassword(archivePath);
+        } else {
+            mw->showError(tr("无法打开压缩包：") + archivePath);
+        }
+        return false;
+    }
+
+    // Some archives only encrypt file data while the index stays readable.
+    if(model->archiveHasEncryptedEntries() && model->fileCount() > 0) {
+        QByteArray probe;
+        const QString firstPath = model->filePathAt(0);
+        bool readable = backend->readEntry(archivePath,
+                                           ArchivePath::innerPath(firstPath),
+                                           probe);
+        if(!readable && backend->unsupportedEncryption(archivePath)) {
+            mw->showError(tr("该压缩包的加密方式暂不支持"));
+            return false;
+        }
+        while(!readable && backend->passwordRequired(archivePath) && attempts < 3) {
+            const QString password = promptPassword();
+            if(password.isEmpty())
+                return false;
+            backend->setPassword(archivePath, password);
+            readable = backend->readEntry(archivePath,
+                                          ArchivePath::innerPath(firstPath),
+                                          probe);
+            attempts++;
+        }
+        if(!readable) {
+            if(backend->hasPassword(archivePath)) {
+                mw->showError(tr("密码错误或该压缩包不支持解密"));
+                backend->clearPassword(archivePath);
+            } else {
+                mw->showError(tr("该压缩包的加密方式暂不支持"));
+            }
+            return false;
+        }
+    }
+
+    state.directoryPath = archivePath;
+    mw->setDirectoryPath(QFileInfo(archivePath).absolutePath());
+    mw->enableDocumentView();
+
+    if(model->fileCount() == 0) {
+        mw->showMessage(tr("压缩包内没有图片"));
+        return false;
+    }
+    return loadFileIndex(0, false, settings->usePreloader());
+}
+
+bool Core::archiveReadOnly() {
+    if(ArchivePath::isArchivePath(state.currentFilePath) || model->source() == SOURCE_ARCHIVE) {
+        mw->showMessage(tr("压缩包内文件不可修改"));
+        return true;
+    }
+    return false;
+}
+
 bool Core::setDirectory(QString path) {
     if(model->directoryPath() != path) {
         this->reset();
@@ -1286,6 +1421,12 @@ bool Core::loadFileIndex(int index, bool async, bool preload) {
 }
 
 void Core::loadParentDir() {
+    if(model->source() == SOURCE_ARCHIVE) {
+        stopSlideshow();
+        QFileInfo archiveInfo(model->directoryPath());
+        loadPath(archiveInfo.absolutePath());
+        return;
+    }
     if(model->directoryPath().isEmpty() || mw->currentViewMode() != MODE_FOLDERVIEW)
         return;
     stopSlideshow();
@@ -1526,10 +1667,13 @@ void Core::updateInfoString() {
         edited = img->isEdited();
     }
     int index = model->indexOfFile(state.currentFilePath);
+    QString displayName = model->fileNameAt(index);
+    if(ArchivePath::isArchivePath(state.currentFilePath))
+        displayName = ArchivePath::displayName(state.currentFilePath);
     mw->setCurrentInfo(index,
                        model->fileCount(),
                        model->filePathAt(index),
-                       model->fileNameAt(index),
+                       displayName,
                        imageSize,
                        fileSize,
                        slideshow,

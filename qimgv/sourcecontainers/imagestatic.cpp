@@ -1,4 +1,5 @@
 #include "imagestatic.h"
+#include <QBuffer>
 #include <time.h>
 
 ImageStatic::ImageStatic(QString _path)
@@ -21,7 +22,7 @@ void ImageStatic::load() {
     if(isLoaded()) {
         return;
     }
-    if(mDocInfo->mimeType().name() == "image/vnd.microsoft.icon")
+    if(!mDocInfo->isArchive() && mDocInfo->mimeType().name() == "image/vnd.microsoft.icon")
         loadICO();
     else
         loadGeneric();
@@ -37,12 +38,22 @@ void ImageStatic::loadGeneric() {
      *
      * tldr: qimage bad
      */
-    QImageReader r(mPath, mDocInfo->format().toStdString().c_str());
+    QByteArray archiveData;
+    std::unique_ptr<QBuffer> buffer;
+    std::unique_ptr<QImageReader> reader;
+    if(mDocInfo->isArchive()) {
+        archiveData = mDocInfo->archiveData();
+        buffer.reset(new QBuffer(&archiveData));
+        buffer->open(QIODevice::ReadOnly);
+        reader.reset(new QImageReader(buffer.get(), mDocInfo->format().toLatin1()));
+    } else {
+        reader.reset(new QImageReader(mPath, mDocInfo->format().toStdString().c_str()));
+    }
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    r.setAllocationLimit(settings->memoryAllocationLimit());
+    reader->setAllocationLimit(settings->memoryAllocationLimit());
 #endif
     QImage *tmp = new QImage();
-    r.read(tmp);
+    reader->read(tmp);
     std::unique_ptr<const QImage> img(tmp);
     img = ImageLib::exifRotated(std::move(img), mDocInfo.get()->exifOrientation());
     // scaling this format via qt results in transparent background
@@ -79,6 +90,10 @@ QString ImageStatic::generateHash(QString str) {
 
 // TODO: move saving to directorymodel
 bool ImageStatic::save(QString destPath) {
+    if(mDocInfo->isArchive()) {
+        qDebug() << "ImageStatic::save() - cannot save file inside archive.";
+        return false;
+    }
     QString tmpPath = destPath + "_" + generateHash(destPath);
     QFileInfo fi(destPath);
     QString ext = fi.suffix();

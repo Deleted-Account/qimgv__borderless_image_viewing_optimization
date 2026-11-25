@@ -1,4 +1,8 @@
 #include "directorymanager.h"
+#include "components/archive/archivebackend.h"
+#include "utils/archivepath.h"
+#include <QImageReader>
+#include <QFileInfo>
 
 namespace fs = std::filesystem;
 
@@ -150,8 +154,64 @@ bool DirectoryManager::setDirectoryRecursive(QString dirPath) {
     return true;
 }
 
+bool DirectoryManager::mountArchive(QString archivePath) {
+    if(archivePath.isEmpty())
+        return false;
+    archivePath = QFileInfo(archivePath).absoluteFilePath();
+    if(!std::filesystem::exists(toStdString(archivePath)) ||
+            !std::filesystem::is_regular_file(toStdString(archivePath))) {
+        qDebug() << "[DirectoryManager] Error - archive does not exist.";
+        return false;
+    }
+
+    stopFileWatcher();
+
+    QList<ArchiveEntry> entries = ArchiveBackend::instance()->listEntries(archivePath);
+    if(entries.isEmpty()) {
+        qDebug() << "[DirectoryManager] Error - cannot read archive.";
+        return false;
+    }
+
+    mArchiveEncrypted = ArchiveBackend::instance()->hasEncryptedEntries(archivePath);
+    mListSource = SOURCE_ARCHIVE;
+    mDirectoryPath = archivePath;
+    fileEntryVec.clear();
+    dirEntryVec.clear();
+
+    for(const ArchiveEntry &entry : entries) {
+        if(entry.isDir || !isArchiveImageEntry(entry.path))
+            continue;
+        fileEntryVec.emplace_back(
+            ArchivePath::join(archivePath, entry.path),
+            entry.path,
+            static_cast<std::uintmax_t>(entry.size),
+            false);
+    }
+
+    sortEntryLists();
+    emit loaded(archivePath);
+    return true;
+}
+
+bool DirectoryManager::archiveHasEncryptedEntries() const {
+    return mArchiveEncrypted;
+}
+
+bool DirectoryManager::isArchiveImageEntry(const QString &innerPath) const {
+    static const QStringList formats = []() {
+        QStringList list;
+        for(const QByteArray &format : QImageReader::supportedImageFormats())
+            list << QString::fromLatin1(format).toLower();
+        if(!list.contains("jfif"))
+            list << "jfif";
+        return list;
+    }();
+    return formats.contains(QFileInfo(innerPath).suffix().toLower());
+}
+
 QString DirectoryManager::directoryPath() const {
-    if(mListSource == SOURCE_DIRECTORY || mListSource == SOURCE_DIRECTORY_RECURSIVE)
+    if(mListSource == SOURCE_DIRECTORY || mListSource == SOURCE_DIRECTORY_RECURSIVE
+            || mListSource == SOURCE_ARCHIVE)
         return mDirectoryPath;
     else
         return "";
@@ -265,6 +325,14 @@ const FSEntry &DirectoryManager::fileEntryAt(int index) const {
 }
 
 QDateTime DirectoryManager::lastModified(QString filePath) const {
+    if(mListSource == SOURCE_ARCHIVE) {
+        QString archive, inner;
+        ArchiveEntry entry;
+        if(ArchivePath::split(filePath, archive, inner) &&
+                ArchiveBackend::instance()->entryInfo(archive, inner, entry))
+            return entry.modified;
+        return QDateTime();
+    }
     QFileInfo info;
     if(containsFile(filePath))
         info.setFile(filePath);

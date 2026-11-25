@@ -27,7 +27,8 @@
 enum FileListSource { // rename? wip
     SOURCE_DIRECTORY,
     SOURCE_DIRECTORY_RECURSIVE,
-    SOURCE_LIST
+    SOURCE_LIST,
+    SOURCE_ARCHIVE
 };
 
 class DirectoryManager;
@@ -43,6 +44,8 @@ public:
     // ignored if the same dir is already opened
     bool setDirectory(QString);
     bool setDirectoryRecursive(QString);
+    bool mountArchive(QString archivePath);
+    bool archiveHasEncryptedEntries() const;
     QString directoryPath() const;
     int indexOfFile(QString filePath) const;
     int indexOfDir(QString dirPath) const;
@@ -101,7 +104,9 @@ private:
     void readSettings();
     SortingMode mSortingMode;
     FileListSource mListSource;
+    bool mArchiveEncrypted = false;
     void loadEntryList(QString directoryPath, bool recursive);
+    bool isArchiveImageEntry(const QString &innerPath) const;
 
     bool path_entry_compare(const FSEntry &e1, const FSEntry &e2) const;
     bool path_entry_compare_reverse(const FSEntry &e1, const FSEntry &e2) const;

@@ -21,6 +21,7 @@ There are two top-level modes:
 | OpenCV (optional) | High-quality scaling filters (`ImageLib::scaled_CV`, unsharp mask). |
 | Exiv2 (optional) | EXIF orientation/tag reading and writing (`DocumentInfo`). |
 | libmpv via dynamic plugin | Video decoding/playback; host stays independent of mpv. |
+| libarchive (optional, fork addition) | Reading images from `zip`/`cbz`/`7z`/`cb7`/`rar`/`cbr`/`tar` (`ArchiveBackend`; compile flag `USE_ARCHIVE`). |
 | KF6WindowSystem (optional) | KDE blur-behind effect. |
 | CMake | Root options + app target + separate plugin project + install rules. |
 
@@ -36,7 +37,8 @@ main.cpp
      ├─ MW                       main window + all GUI widgets
      ├─ shared_ptr<DirectoryModel>
      │   ├─ DirectoryManager     scan / sort / mutate FSEntry lists
-     │   │   └─ DirectoryWatcher (inotify / Windows / dummy)
+     │   │   ├─ DirectoryWatcher (inotify / Windows / dummy)
+     │   │   └─ ArchiveBackend   (fork) index/read archive entries via libarchive
      │   ├─ Loader               async decode (QThreadPool)
      │   ├─ Cache                in-memory shared_ptr<Image>
      │   └─ Scaler               coalesced HQ scaling (QThreadPool)
@@ -101,6 +103,28 @@ Core::loadPath(path)                       (file, dir, drop, open dialog, clipbo
 ```
 
 `Core::State::delayModel` defers loading a new directory until the requested file is already visible, avoiding an empty first frame.
+
+### Archive viewing (fork addition)
+
+```text
+Core::loadPath("archive.cbz" | "archive.cbz::inner.png")
+  -> Core::loadArchive()                  (password prompt loop, max 3 tries)
+  -> DirectoryModel::mountArchive()       (cache cleared)
+  -> DirectoryManager::mountArchive()
+       -> ArchiveBackend::listEntries()   (mtime/size-cached index, image suffixes only)
+       -> FSEntry.path = "archive.cbz::inner.png"
+  -> Core::loadFileIndex()
+       -> Loader -> ImageFactory::createImage()
+            -> DocumentInfo(virtual path) -> ArchiveBackend::entryInfo()/readEntry()
+            -> ImageStatic / ImageAnimated (decode from QBuffer, no temp files)
+```
+
+Key invariants:
+
+- `::` is the only virtual-path separator (`utils/archivepath.*`). The full inner path is used for uniqueness/sorting; `Core::updateInfoString()` shows the basename.
+- `Core::archiveReadOnly()` blocks file-level writes (save/delete/rename/copy/move/drag-out/`cropAndSave`) whenever `state.currentFilePath` is virtual or `model->source() == SOURCE_ARCHIVE`.
+- `Core::loadParentDir()` leaves an archive by reloading its containing directory.
+- Passwords are memory-only (`ArchiveBackend::setPassword`); encrypted 7z (header or data) is reported as unsupported because libarchive cannot decrypt it.
 
 ### High-quality scaling
 
@@ -170,10 +194,11 @@ Scripts are registered as actions named `s:<scriptName>` and dispatched to `Scri
     ├── components/                 backend services (model, presenters, loader, cache,
     │   │                            scaler, thumbnailer, directory manager/watchers)
     │   ├── actionmanager/, scriptmanager/
+    │   ├── archive/                ArchiveBackend (fork, libarchive)
     │   └── directorymanager/watchers/{linux,windows}
     ├── sourcecontainers/           FSEntry, DocumentInfo, Image*, Thumbnail, Video
     ├── utils/                      actions, inputmap, script, imagefactory, imagelib,
-    │                               fileoperations, cmdoptionsrunner, ...
+    │                               archivepath (fork), fileoperations, cmdoptionsrunner, ...
     ├── gui/                        MW, CentralWidget, idirectoryview
     │   ├── viewers/                ImageViewerV2, ViewerWidget, DocumentWidget, video proxies
     │   ├── customwidgets/          ThumbnailView, ThumbnailWidget, buttons, menus, ...

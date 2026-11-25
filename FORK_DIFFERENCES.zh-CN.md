@@ -27,6 +27,7 @@
 | 缩放 badge | 左下角且下方有留白，使用主题 overlay 颜色 | 贴角；底部 info 时移到左上角；复用 windowed info 颜色 |
 | 右键 fit 按钮 | 菜单保持打开 | 前 4 个尺寸按钮可立即关闭菜单（默认开启） |
 | 构建/部署 | 通用 release 构建 | 可选本机 CPU 原生优化构建（AVX2/FMA + LTO）和本地部署脚本 |
+| 压缩包看图 | 不支持 | 直接打开 zip/cbz/7z/cb7/rar/cbr/tar，只读浏览包内图片 |
 
 ## 2. 窗口尺寸与图片 fit 模型
 
@@ -295,14 +296,79 @@ sudo ./deploy-system.sh
 
 部署出的二进制针对构建机器 CPU 优化（开发机支持 AVX2/FMA）。它不适合直接复制到其他机器。
 
-## 9. 新增文档
+## 9. 压缩包内看图
+
+上游只能浏览磁盘上的图片文件。本 fork 支持直接把压缩包当作图片目录打开。
+
+### 9.1 支持范围
+
+- 扩展名：`zip`、`cbz`、`7z`、`cb7`、`rar`、`cbr`、`tar`。
+- 通过 libarchive 读取。构建时检测到 libarchive 才启用，并定义 `USE_ARCHIVE`；未启用时相关功能自动降级。
+- 只索引包内图片：按 Qt 支持的图片后缀过滤，包内视频（如 `mp4`）不会出现在列表里。
+
+### 9.2 虚拟路径
+
+包内文件使用虚拟路径：
+
+```text
+/absolute/path/archive.cbz::sub/inner.png
+```
+
+- `::` 为分隔符；
+- 该路径同时作为 `FSEntry.path`、缓存 key、`state.currentFilePath` 和 `DocumentInfo::filePath()`；
+- 排序与唯一性使用包内完整路径，界面显示只用 basename。
+
+### 9.3 界面行为
+
+- 打开压缩包后进入文档视图，按 `[i/n]` 浏览包内图片；
+- 窗口 info 只显示包内 basename、序号和解压后大小，不显示压缩包名；
+- 退出压缩包复用 `goUp`（上一级 / Backspace），回到压缩包所在目录。
+
+### 9.4 只读策略
+
+只拦截**文件级写操作**：
+
+- 拦截：保存、另存为、删除、移动到回收站、重命名、复制、移动、拖出（含 `Shift` 拖出）、`cropAndSave`；
+- 允许但不落盘：裁剪、旋转、翻转、缩放（可预览，保存被拦截）；
+- 允许：设为壁纸、复制图片到剪贴板。
+
+### 9.5 密码
+
+- 加密包首次打开时弹出密码框，最多尝试 3 次；
+- 取消或连续失败则退出，并提示密码错误；
+- 密码仅保存在内存中，不写入配置或文件；
+- 遇到无法解密的加密方式时提示“该压缩包的加密方式暂不支持”。
+
+实测支持矩阵（libarchive 3.8.7）：
+
+| 格式 / 加密方式 | 密码支持 |
+|---|---|
+| zip / cbz，ZipCrypto | 是 |
+| zip / cbz，AES-128/256 | 是 |
+| 7z / cb7，数据加密 | 否 |
+| 7z / cb7，头加密（`-mhe=on`） | 否 |
+| rar，RAR4 数据/头加密 | 否 |
+| rar5，加密 | 未实测（libarchive 理论支持） |
+| tar | 无加密概念 |
+
+能真正输密码打开的只有 zip 系。7z 和 RAR4 是 libarchive 自身未实现解密，与本 fork 无关。
+
+不引入外部解压器兜底的理由：Ark 只是调用 `7z`/`unrar`/libarchive 的 GUI 外壳，没有可复用的库接口；直接调 `7z` CLI 需要额外进程、解析文本输出，密码只能通过命令行参数传递（存在 `/proc/<pid>/cmdline` 暴露面），且本机 Fedora 版 7-Zip 已裁掉 RAR 支持，收益有限。
+
+### 9.6 缓存
+
+- 归档索引最多缓存 4 个包，按源文件 `mtime`/大小校验失效；
+- 解压出的图片数据使用 3 条 LRU；
+- libarchive 读取串行化，避免多线程并发读同一个包。
+
+## 10. 新增文档
 
 - `ARCHITECTURE.md` — 面向新 session / agent 的架构速览。
 - `WINDOW_SCALING_CONSENSUS.md` — 窗口尺寸、fit 模式、1:1 定位和平移的行为契约。
 - `WINDOW_POSITIONING_NOTES.md` — 窗口定位重写前的设计讨论记录。
 - `FORK_DIFFERENCES.md` 和 `FORK_DIFFERENCES.zh-CN.md` — 本文档。
 
-## 10. 非目标与限制
+## 11. 非目标与限制
 
 - 没有添加自定义标题栏或窗口按钮。
 - 无边框外观依赖 KDE 的 **No Titlebar and Frame** 窗口规则。

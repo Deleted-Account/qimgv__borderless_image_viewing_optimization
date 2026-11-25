@@ -1,4 +1,7 @@
 #include "thumbnailerrunnable.h"
+#include <QBuffer>
+#include <QImageReader>
+#include <functional>
 
 ThumbnailerRunnable::ThumbnailerRunnable(ThumbnailCache* _cache, QString _path, int _size, bool _crop, bool _force) :
     path(_path),
@@ -42,7 +45,9 @@ std::shared_ptr<Thumbnail> ThumbnailerRunnable::generate(ThumbnailCache* cache, 
             return thumbnail;
         }
         std::pair<QImage*, QSize> pair;
-        if(imgInfo.type() == VIDEO)
+        if(imgInfo.isArchive())
+            pair = createThumbnailFromData(imgInfo.archiveData(), imgInfo.format().toStdString().c_str(), size, crop);
+        else if(imgInfo.type() == VIDEO)
             pair = createVideoThumbnail(path, size, crop);
         else
             pair = createThumbnail(imgInfo.filePath(), imgInfo.format().toStdString().c_str(), size, crop);
@@ -90,8 +95,11 @@ std::shared_ptr<Thumbnail> ThumbnailerRunnable::generate(ThumbnailCache* cache, 
 ThumbnailerRunnable::~ThumbnailerRunnable() {
 }
 
-std::pair<QImage*, QSize> ThumbnailerRunnable::createThumbnail(QString path, const char *format, int size, bool squared) {
-    QImageReader *reader = new QImageReader(path, format);
+namespace {
+
+std::pair<QImage*, QSize> makeThumbnail(std::unique_ptr<QImageReader> reader,
+                                        const std::function<std::unique_ptr<QImageReader>()> &reopen,
+                                        int size, bool squared) {
     Qt::AspectRatioMode ARMode = squared?
                 (Qt::KeepAspectRatioByExpanding):(Qt::KeepAspectRatio);
     QImage *result = nullptr;
@@ -118,9 +126,7 @@ std::pair<QImage*, QSize> ThumbnailerRunnable::createThumbnail(QString path, con
             result = nullptr;
             // Force reset reader because it is really finicky
             // and can fail on the second read attempt (yeah wtf)
-            reader->setFileName("");
-            delete reader;
-            reader = new QImageReader(path, format);
+            reader = reopen();
         }
     }
     if(manualResize) { // manual resize & crop. slower but should just work
@@ -147,10 +153,29 @@ std::pair<QImage*, QSize> ThumbnailerRunnable::createThumbnail(QString path, con
         }
         delete fullSize;
     }
-    // force reader to close file so it can be deleted later
-    reader->setFileName("");
-    delete reader;
     return std::make_pair(result, originalSize);
+}
+
+}
+
+std::pair<QImage*, QSize> ThumbnailerRunnable::createThumbnail(QString path, const char *format, int size, bool squared) {
+    const QByteArray fmt(format);
+    auto reopen = [path, fmt]() {
+        return std::unique_ptr<QImageReader>(new QImageReader(path, fmt));
+    };
+    return makeThumbnail(reopen(), reopen, size, squared);
+}
+
+std::pair<QImage*, QSize> ThumbnailerRunnable::createThumbnailFromData(const QByteArray &data, const char *format, int size, bool squared) {
+    const QByteArray fmt(format);
+    auto buffer = std::make_shared<QBuffer>();
+    buffer->setData(data);
+    buffer->open(QIODevice::ReadOnly);
+    auto reopen = [buffer, fmt]() {
+        buffer->seek(0);
+        return std::unique_ptr<QImageReader>(new QImageReader(buffer.get(), fmt));
+    };
+    return makeThumbnail(reopen(), reopen, size, squared);
 }
 
 std::pair<QImage*, QSize> ThumbnailerRunnable::createVideoThumbnail(QString path, int size, bool squared) {

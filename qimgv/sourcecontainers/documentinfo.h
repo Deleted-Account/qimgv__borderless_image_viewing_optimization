@@ -3,6 +3,7 @@
 #include <QString>
 #include <QSize>
 #include <QUrl>
+#include <QByteArray>
 #include <QMimeDatabase>
 #include <QDebug>
 #include <QFileInfo>
@@ -42,6 +43,9 @@ public:
     QString format() const;
     int exifOrientation() const;
 
+    bool isArchive() const;
+    QByteArray archiveData() const;
+
     QDateTime lastModified() const;
     void refresh();
     void loadExifTags();
@@ -54,9 +58,23 @@ private:
     QString mFormat;
     bool exifLoaded;
 
+    bool mArchive = false;
+    QString mVirtualPath;
+    QString mArchivePath;
+    QString mInnerPath;
+    QByteArray mArchiveData;
+    qint64 mArchiveSize = 0;
+    QDateTime mArchiveModified;
+
     // guesses file type from its contents
     // and sets extension
     void detectFormat();
+    void initArchive(const QString &virtualPath);
+    void detectFormatFromData();
+    bool detectAPNGData();
+    bool detectAnimatedWebPData();
+    bool detectAnimatedAvifData();
+    bool detectAnimatedJxlData();
     void loadExifOrientation();
     bool detectAPNG();
     bool detectAnimatedWebP();
