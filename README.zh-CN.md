@@ -43,6 +43,14 @@ Fork 分支：`kde-tweaks`。
 5. **右键菜单，顶部按钮使用体验调整**
    - 加入了点击右键菜单顶部非`+` `-` 的四个按钮，可立刻关闭右键菜单的设置
 
+6. **适配支持原生 Wayland，并修复相关 bug**
+   - 可以直接以原生 Wayland 客户端运行，不再依赖 XWayland。
+   - 顺带修掉了切到 Wayland 后暴露的一批问题：小数缩放（比如 150%）下图片顶部/左侧露细黑边、
+     冷启动首次打开图片的偏移与缩放错误、全屏切图时缩放逐张累加等。
+   - Wayland 不允许应用自己摆放窗口，所以配套给了一个 KWin 脚本 `qimgv-centering` 负责把窗口居中；
+     不在 KDE / KWin 下时该脚本不生效，其余功能照常。
+   - 非 KDE 桌面，建议以 XWayland 模式部署和运行，才能享受到图片切换后窗口居中等优化。
+
 ## 个人推荐最佳体验使用设置
 
 1. KDE 窗口规则给 qimgv 开启 **No Titlebar and Frame**。
@@ -50,6 +58,30 @@ Fork 分支：`kde-tweaks`。
    - 开启 `Crop oversized image (1:1)`
    - 选择 `Top Center`
    - `always expand` 按个人喜好开启或关闭
+
+## 原生 Wayland 模式
+
+默认就是原生 Wayland。先把仓库构建好（二进制从 `build-native/` 取），然后在仓库根目录执行：
+
+```bash
+sudo ./deploy-system.sh
+```
+
+- 安装二进制到系统，并生成 `/usr/bin/qimgv` 启动器（不带 `QT_QPA_PLATFORM`，即直接以 Wayland 客户端运行）。
+- 同时安装并启用 KWin 脚本 `qimgv-centering`（写入 `kwinrc` 并让 KWin 重新加载），由它负责把 qimgv 窗口居中。
+- 脚本顶部的 `SRC` 是仓库绝对路径，换到别的机器记得改成你自己的。
+- 居中依赖 KDE Plasma 6 / KWin 6。其他桌面一样能原生 Wayland 跑 qimgv，只是没有居中脚本。
+
+### 切换 / 回退到 XWayland
+
+```bash
+sudo ./deploy-system.sh --xwayland
+```
+
+- 启动器改为带 `QT_QPA_PLATFORM=xcb`，走 XWayland 运行。
+- 同时禁用 `qimgv-centering`（XWayland 下窗口定位不需要它）。
+
+两种模式切换后重启 qimgv 生效。不想用脚本也可以手动来：在 系统设置 → 窗口管理 → KWin 脚本 里启用/禁用 `qimgv-centering`，以及给启动器加上 `QT_QPA_PLATFORM=xcb`。
 
 ## 文档
 

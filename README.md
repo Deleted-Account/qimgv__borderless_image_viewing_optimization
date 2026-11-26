@@ -44,6 +44,12 @@ Fork branch: `kde-tweaks`.
 5. **Adjustments to the user experience for the right-click menu and its top-row buttons**
    - Added functionality so that clicking any of the four buttons at the top of the right-click menu—excluding the `+` and `-` buttons—will immediately close the right-click menu.
 
+6. **Native Wayland support and related bug fixes**
+   - Runs directly as a native Wayland client, no longer depending on XWayland.
+   - Fixed the issues exposed by the move to Wayland: thin dark seams at the top/left edges under fractional scaling (e.g. 150%), wrong offset and scale on the first image of a cold start, and cumulative zoom drift when switching images in fullscreen.
+   - Wayland does not let apps position their own windows, so a companion KWin script `qimgv-centering` centers the window; outside KDE / KWin it has no effect and everything else works as usual.
+   - On non-KDE desktops, deploy and run in XWayland mode to keep optimizations such as centering the window after switching images.
+
 ## Recommended setup for the best experience
 
 1. Enable **No Titlebar and Frame** for qimgv via a KDE window rule.
@@ -51,6 +57,30 @@ Fork branch: `kde-tweaks`.
    - enable `Crop oversized image (1:1)`
    - choose `Top Center`
    - turn `always expand` on or off according to preference
+
+## Native Wayland mode
+
+Native Wayland is the default. Build the repo first (binaries are taken from `build-native/`), then from the repo root:
+
+```bash
+sudo ./deploy-system.sh
+```
+
+- Installs the binary system-wide and creates the `/usr/bin/qimgv` launcher (no `QT_QPA_PLATFORM`, so it runs as a native Wayland client).
+- Also installs and enables the KWin script `qimgv-centering` (writes `kwinrc` and asks KWin to reload), which centers the qimgv window.
+- `SRC` at the top of the script is an absolute repo path; change it to yours on another machine.
+- Centering requires KDE Plasma 6 / KWin 6. Other desktops can still run qimgv natively on Wayland, just without the centering script.
+
+### Switching / reverting to XWayland
+
+```bash
+sudo ./deploy-system.sh --xwayland
+```
+
+- The launcher gets `QT_QPA_PLATFORM=xcb` and runs through XWayland.
+- Disables `qimgv-centering` (not needed for window positioning under XWayland).
+
+Restart qimgv after switching modes. You can also do it manually without the script: enable/disable `qimgv-centering` under System Settings → Window Management → KWin Scripts, and add `QT_QPA_PLATFORM=xcb` to the launcher.
 
 ## Docs
 
