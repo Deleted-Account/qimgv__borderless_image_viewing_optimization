@@ -578,8 +578,8 @@ void ViewerWidget::showCursor() {
 }
 
 void ViewerWidget::showContextMenu() {
-    QPoint pos = cursor().pos();
-    showContextMenu(pos);
+    // 键盘触发（无鼠标位置）时，放在视图中心，避免依赖不可靠的 QCursor::pos()
+    showContextMenu(mapToGlobal(rect().center()));
 }
 
 void ViewerWidget::showContextMenu(QPoint pos) {

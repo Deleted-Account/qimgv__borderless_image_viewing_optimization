@@ -122,13 +122,16 @@ void ImageViewerV2::onDPRChanged() {
     if(pixmap) {
         pixmap->setDevicePixelRatio(dpr);
         pixmapItem.setPixmap(*pixmap);
+        // dpr 变化会改变 pixmap 的逻辑尺寸，必须同步居中偏移，
+        // 否则冷启动（dpr 由 1.0 变为小数缩放值）后图像会按旧尺寸向左上偏移。
+        syncPixmapItemOffset();
         pixmapItem.show();
         pixmapItem.update();
         updateMinScale();
         applyFitMode();
         requestScaling();
         update();
-        emit zoomResizeRequested(pixmap->deviceIndependentSize().toSize());
+        emit zoomResizeRequested(pixmap->size());
     }
 }
 
@@ -904,6 +907,7 @@ void ImageViewerV2::fitWidth() {
         swapToOriginalPixmap();
         doZoom(scaleX);
     }
+    coverRoundingGap();
     centerIfNecessary();
     // just center somewhere at the top then do snap
     if(scaledSizeR().height() > viewport()->height()) {
@@ -928,6 +932,7 @@ void ImageViewerV2::fitWindow() {
             swapToOriginalPixmap();
             doZoom(fitWindowScale);
         }
+        coverRoundingGap();
         centerOnPixmap();
     }
 }
@@ -939,8 +944,31 @@ void ImageViewerV2::fitNormal() {
     if(mDisplayScale < minScale)
         minScale = mDisplayScale;
     doZoom(mDisplayScale);
+    // 小数 dpr 下整数窗口表面与图像设备像素无法精确相等，
+    // 补齐不足 1 个设备像素的差，消除边缘露出的背景细缝。
+    coverRoundingGap();
     minScale = oldMinScale;
     applyCropAlignment();
+}
+
+// 当图像因设备像素取整比视口小不到 1 个设备像素时，把缩放微调到刚好铺满。
+// 仅作用于“几乎贴合”的轴，正常的等比留白不受影响。
+void ImageViewerV2::coverRoundingGap() {
+    if(!pixmap || dpr <= 0)
+        return;
+    // Wayland 表面的设备像素尺寸必为整数
+    const qreal vpDeviceW = qRound(viewport()->width()  * dpr);
+    const qreal vpDeviceH = qRound(viewport()->height() * dpr);
+    // 当前缩放下的图像设备像素尺寸
+    const qreal imgDeviceW = pixmap->width()  * currentScale();
+    const qreal imgDeviceH = pixmap->height() * currentScale();
+    qreal needed = currentScale();
+    if(imgDeviceW < vpDeviceW && vpDeviceW - imgDeviceW < 1.0)
+        needed = qMax(needed, vpDeviceW / pixmap->width());
+    if(imgDeviceH < vpDeviceH && vpDeviceH - imgDeviceH < 1.0)
+        needed = qMax(needed, vpDeviceH / pixmap->height());
+    if(needed > currentScale())
+        doZoom(needed);
 }
 
 void ImageViewerV2::applyCropAlignment() {
@@ -952,17 +980,28 @@ void ImageViewerV2::applyCropAlignment() {
 
     if(img.width() <= vport.width() + 1 && img.height() <= vport.height() + 1) {
         centerOn(target);
-        return;
+    } else {
+        if(focusIn1to1 == FOCUS_TOP_CENTER) {
+            target.setY(img.top() + vport.height() / 2);
+        } else if(focusIn1to1 == FOCUS_TOP_LEFT) {
+            target.setX(img.left() + vport.width() / 2);
+            target.setY(img.top() + vport.height() / 2);
+        }
+        centerOn(target);
     }
 
-    if(focusIn1to1 == FOCUS_TOP_CENTER) {
-        target.setY(img.top() + vport.height() / 2);
-    } else if(focusIn1to1 == FOCUS_TOP_LEFT) {
-        target.setX(img.left() + vport.width() / 2);
-        target.setY(img.top() + vport.height() / 2);
+    // 将图像左上角对齐到设备像素网格，避免小数 dpr 下亚像素采样导致的发虚/发暗边
+    if(dpr > 0) {
+        QPointF topLeft = pixmapItem.sceneBoundingRect().topLeft();
+        QPointF vp = mapFromScene(topLeft);
+        QPointF snapped(qRound(vp.x() * dpr) / dpr,
+                        qRound(vp.y() * dpr) / dpr);
+        QPointF delta = snapped - vp;
+        if(!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y())) {
+            QPointF center = mapToScene(viewport()->rect().center());
+            centerOn(center - delta);
+        }
     }
-
-    centerOn(target);
 }
 
 void ImageViewerV2::fitWindowStretch() {
@@ -976,7 +1015,7 @@ void ImageViewerV2::fitWindowStretch() {
         swapToOriginalPixmap();
         doZoom(fitWindowStretchScale);
     }
-
+    coverRoundingGap();
     centerOnPixmap();
 }
 
@@ -1025,7 +1064,7 @@ void ImageViewerV2::setFitOriginal() {
     emit manualScaleOverride();
     mDisplayScale = 1.0f;
     if(pixmap && !pixmap->isNull())
-        emit nativeFitRequested(pixmap->deviceIndependentSize().toSize());
+        emit nativeFitRequested(pixmap->size());
     setFitMode(FIT_ORIGINAL);
 }
 

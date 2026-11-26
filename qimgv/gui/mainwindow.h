@@ -9,6 +9,9 @@
 #include <QMimeData>
 #include <QImageWriter>
 #include <QWindow>
+#include <QDateTime>
+#include <QTimer>
+#include <QCursor>
 
 #if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
 #include <QDesktopWidget>
@@ -71,8 +74,8 @@ public:
     void showImage(std::unique_ptr<QPixmap> pixmap);
     void showAnimation(std::shared_ptr<QMovie> movie);
     void showVideo(QString file);
-    void resizeForZoom(QSize logicalSize);
-    void resizeForNativeFit(QSize logicalSize);
+    void resizeForZoom(QSize physicalSize);
+    void resizeForNativeFit(QSize physicalSize);
 
     void setCurrentInfo(int fileIndex, int fileCount, QString filePath, QString fileName, QSize imageSize, qint64 fileSize, bool slideshow, bool shuffle, bool edited);
     void setExifInfo(QMap<QString, QString>);
@@ -132,7 +135,7 @@ private:
     void setupCopyOverlay();
     void setupSaveOverlay();
     void setupRenameOverlay();
-    void applyAutoResize(QSize logicalSize);
+    void applyAutoResize(QSize physicalSize);
     float computeDisplayScale(QSizeF logicalSize, QSizeF available, bool cropMode) const;
     void recomputeAutoScale();
     static FloatingWidgetPosition infoPositionFromIndex(int index);
@@ -145,6 +148,9 @@ private:
     QString mLastWindowedInfoPath = QStringLiteral("<unset>");
     QSize mPendingAutoResizeSize;
     QSize mPendingZoomResizeSize;
+    QPoint mContextMenuPos;
+    bool mContextMenuPosValid = false;
+    qint64 mLastResizeMs = 0;
     QTimer mZoomResizeTimer;
     QTimer mWindowedInfoTimer;
 

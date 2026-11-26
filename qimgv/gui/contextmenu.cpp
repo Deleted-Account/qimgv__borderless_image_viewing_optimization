@@ -176,20 +176,32 @@ void ContextMenu::showAt(QPoint pos) {
 }
 
 void ContextMenu::setGeometry(QRect geom) {
-    auto screen = QGuiApplication::screenAt(cursor().pos());
+    // 不要用 QCursor::pos()：Wayland 下可能滞后，且与 Qt 记录的窗口位置不同步
+    QScreen *screen = QGuiApplication::screenAt(geom.topLeft());
     if(!screen) // fallback
-        screen = QGuiApplication::primaryScreen();
+        screen = window() ? window()->screen() : QGuiApplication::primaryScreen();
     if(screen) {
+        QRect avail = screen->availableGeometry();
+        const int anchorY = geom.top();
         // fit inside the current screen
-        if(geom.bottom() > screen->geometry().bottom())
-            geom.moveBottom(cursor().pos().y());
-        if(geom.right() > screen->geometry().right())
-            geom.moveRight(screen->geometry().right());
+        if(geom.bottom() > avail.bottom())
+            geom.moveBottom(anchorY); // 下方放不下时改为向上展开，仍锚定点击点
+        if(geom.right() > avail.right())
+            geom.moveRight(avail.right());
+        if(geom.left() < avail.left())
+            geom.moveLeft(avail.left());
+        if(geom.top() < avail.top())
+            geom.moveTop(avail.top());
     }
     QWidget::setGeometry(geom);
 }
 
 void ContextMenu::mousePressEvent(QMouseEvent *event) {
+    if(event->button() == Qt::RightButton) {
+        // 菜单已打开时再次右键：不关闭，直接以新位置重新展开主菜单
+        showAt(mapToGlobal(event->position().toPoint()));
+        return;
+    }
     QWidget::mousePressEvent(event);
     hide();
 }

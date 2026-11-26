@@ -65,7 +65,9 @@ MW::MW(QWidget *parent)
         viewerWidget->setFitUpdatesEnabled(false);
         applyAutoResize(size);
         viewerWidget->setFitUpdatesEnabled(true);
-        viewerWidget->centerForZoom();
+        // dpr 变化会重算 displayScale，但窗口逻辑尺寸可能不变（无 resizeEvent），
+        // 必须显式重新应用当前 fit，否则图像会停留在旧缩放，比窗口大而可滚动。
+        viewerWidget->applyCurrentFitMode();
     });
     connect(&mWindowedInfoTimer, &QTimer::timeout, this, [this]() {
         if(windowedInfoBarOverlay)
@@ -299,13 +301,28 @@ float MW::computeDisplayScale(QSizeF logicalSize, QSizeF available, bool cropMod
     return static_cast<float>(expandScale * fit);
 }
 
-void MW::applyAutoResize(QSize logicalSize) {
+// 取最大的整数逻辑尺寸 n，使 Wayland 表面设备像素 round(n * dpr) 不超过 devicePx。
+// 小数缩放（如 dpr = 1.5）下，整数逻辑尺寸无法精确命中图像的物理像素数：
+// 向上取整会让表面比图像大 1 个设备像素，中央对齐后边缘露出背景细缝；
+// 这里向下取值，宁可裁掉不足 1 个设备像素，也绝不产生缝隙。
+static int deviceBoundedLogicalExtent(qreal devicePx, qreal dpr) {
+    if(devicePx <= 0)
+        return 1;
+    if(dpr <= 0)
+        return qMax(1, qRound(devicePx));
+    int n = static_cast<int>(qFloor(devicePx / dpr));
+    while(n > 1 && qRound(n * dpr) > devicePx)
+        --n;
+    return qMax(1, n);
+}
+
+void MW::applyAutoResize(QSize physicalSize) {
     if(mApplyingAutoResize)
         return;
     if(!settings->autoResizeWindow())
         return;
     if(!isVisible()) {
-        mPendingAutoResizeSize = logicalSize;
+        mPendingAutoResizeSize = physicalSize;
         return;
     }
     if(windowState() != Qt::WindowNoState || isFullScreen() || isMaximized())
@@ -324,25 +341,40 @@ void MW::applyAutoResize(QSize logicalSize) {
 
     QSizeF area(available.width() - frame.left() - frame.right(),
                 available.height() - frame.top() - frame.bottom());
-    QSizeF image = logicalSize.isEmpty() ? area : QSizeF(logicalSize);
+    qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
     bool cropMode = settings->imageFitMode() == FIT_ORIGINAL;
-    qreal scale = computeDisplayScale(image, area, cropMode);
-    QSizeF desired = image * scale;
-    QSizeF finalSize;
-    if(cropMode) {
-        finalSize.setWidth(qMin(desired.width(), area.width()));
-        finalSize.setHeight(qMin(desired.height(), area.height()));
+
+    QSize clientSize;
+    if(physicalSize.isEmpty()) {
+        // 无图像（视频 / 清空）：铺满可用区域
+        clientSize = area.toSize().expandedTo(QSize(1, 1));
+        if(mAutoScaleActive) {
+            mAutoScaleLogicalSize = clientSize;
+            viewerWidget->setAutoScaleActive(true);
+            viewerWidget->setDisplayScale(1.0f);
+        }
     } else {
-        finalSize = desired;
+        // 以物理像素为基准推导缩放，避免经过四舍五入的逻辑尺寸引入误差
+        QSizeF imageLogical(physicalSize.width() / dpr,
+                            physicalSize.height() / dpr);
+        qreal scale = computeDisplayScale(imageLogical, area, cropMode);
+        // 渲染后的设备像素尺寸（即 doZoom 后图像真实覆盖的像素数）
+        qreal deviceWidth  = physicalSize.width()  * scale;
+        qreal deviceHeight = physicalSize.height() * scale;
+        // 由设备像素反推整数逻辑窗口尺寸：保证窗口表面绝不大于图像渲染尺寸
+        int width  = deviceBoundedLogicalExtent(deviceWidth,  dpr);
+        int height = deviceBoundedLogicalExtent(deviceHeight, dpr);
+        width  = qMin(width,  qMax(1, static_cast<int>(qFloor(area.width()))));
+        height = qMin(height, qMax(1, static_cast<int>(qFloor(area.height()))));
+        clientSize = QSize(width, height);
+
+        if(mAutoScaleActive) {
+            mAutoScaleLogicalSize = imageLogical.toSize();
+            viewerWidget->setAutoScaleActive(true);
+            viewerWidget->setDisplayScale(static_cast<float>(scale));
+        }
     }
 
-    if(mAutoScaleActive) {
-        mAutoScaleLogicalSize = image.toSize();
-        viewerWidget->setAutoScaleActive(true);
-        viewerWidget->setDisplayScale(static_cast<float>(scale));
-    }
-
-    QSize clientSize = finalSize.toSize().expandedTo(QSize(1, 1));
     QSize frameSize(clientSize.width() + frame.left() + frame.right(),
                     clientSize.height() + frame.top() + frame.bottom());
     QRect newFrame(QPoint(0, 0), frameSize);
@@ -359,16 +391,17 @@ void MW::recomputeAutoScale() {
     if(!mAutoScaleActive || mApplyingAutoResize || !settings->autoResizeWindow())
         return;
 
-    QSize logicalSize = viewerWidget->logicalSourceSize();
-    if(logicalSize.isEmpty())
-        logicalSize = mAutoScaleLogicalSize;
+    // 以物理像素为基准，避免逻辑尺寸取整带来的误差
+    QSize physicalSize = viewerWidget->sourceSize();
     QSize viewport = viewerWidget->viewportSize();
-    if(logicalSize.isEmpty() || viewport.isEmpty())
+    if(physicalSize.isEmpty() || viewport.isEmpty())
         return;
 
+    qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
+    QSizeF imageLogical(physicalSize.width() / dpr, physicalSize.height() / dpr);
     QSizeF area(viewport.width(), viewport.height());
     bool cropMode = settings->imageFitMode() == FIT_ORIGINAL;
-    float scale = computeDisplayScale(logicalSize, area, cropMode);
+    float scale = computeDisplayScale(imageLogical, area, cropMode);
     if(qAbs(scale - viewerWidget->displayScale()) < 0.01f)
         return;
 
@@ -377,16 +410,16 @@ void MW::recomputeAutoScale() {
     viewerWidget->refreshZoomIndicator();
 }
 
-void MW::resizeForZoom(QSize logicalSize) {
-    if(logicalSize.isEmpty())
+void MW::resizeForZoom(QSize physicalSize) {
+    if(physicalSize.isEmpty())
         return;
-    mPendingZoomResizeSize = logicalSize;
+    mPendingZoomResizeSize = physicalSize;
     if(!mZoomResizeTimer.isActive())
         mZoomResizeTimer.start();
 }
 
-void MW::resizeForNativeFit(QSize logicalSize) {
-    if(logicalSize.isEmpty() || mApplyingAutoResize)
+void MW::resizeForNativeFit(QSize physicalSize) {
+    if(physicalSize.isEmpty() || mApplyingAutoResize)
         return;
     if(windowState() != Qt::WindowNoState || isFullScreen() || isMaximized())
         return;
@@ -395,7 +428,10 @@ void MW::resizeForNativeFit(QSize logicalSize) {
     if(!screen)
         return;
     QRect available = screen->availableGeometry();
-    if(logicalSize.width() <= available.width() && logicalSize.height() <= available.height())
+    qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
+    // 图像本身已能放进可用区域，无需调整窗口
+    if(physicalSize.width() / dpr <= available.width()
+            && physicalSize.height() / dpr <= available.height())
         return;
 
     QRect frameRect = frameGeometry();
@@ -407,9 +443,12 @@ void MW::resizeForNativeFit(QSize logicalSize) {
 
     QSizeF area(available.width() - frame.left() - frame.right(),
                 available.height() - frame.top() - frame.bottom());
-    QSizeF finalSize(qMin(static_cast<qreal>(logicalSize.width()), area.width()),
-                     qMin(static_cast<qreal>(logicalSize.height()), area.height()));
-    QSize clientSize = finalSize.toSize().expandedTo(QSize(1, 1));
+    // 1:1 设备像素，同时保证窗口表面不超过图像，避免边缘细缝
+    int width  = deviceBoundedLogicalExtent(physicalSize.width(),  dpr);
+    int height = deviceBoundedLogicalExtent(physicalSize.height(), dpr);
+    width  = qMin(width,  qMax(1, static_cast<int>(qFloor(area.width()))));
+    height = qMin(height, qMax(1, static_cast<int>(qFloor(area.height()))));
+    QSize clientSize(width, height);
     QSize frameSize(clientSize.width() + frame.left() + frame.right(),
                     clientSize.height() + frame.top() + frame.bottom());
     QRect newFrame(QPoint(0, 0), frameSize);
@@ -419,6 +458,7 @@ void MW::resizeForNativeFit(QSize logicalSize) {
 
     viewerWidget->setDisplayScale(1.0f);
     mApplyingAutoResize = true;
+    mLastResizeMs = QDateTime::currentMSecsSinceEpoch();
     setGeometry(newClient);
     mApplyingAutoResize = false;
 }
@@ -427,16 +467,21 @@ void MW::showImage(std::unique_ptr<QPixmap> pixmap) {
     if(pixmap) {
         qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
         pixmap->setDevicePixelRatio(dpr);
-        QSize logicalSize = pixmap->deviceIndependentSize().toSize();
+        QSize physicalSize = pixmap->size();
+        QSize logicalSize = QSizeF(physicalSize / dpr).toSize();
         if(settings->autoResizeWindow()) {
             mAutoScaleLogicalSize = logicalSize;
             mAutoScaleActive = true;
             viewerWidget->setAutoScaleActive(true);
         }
         viewerWidget->setFitUpdatesEnabled(false);
-        applyAutoResize(logicalSize);
+        applyAutoResize(physicalSize);
         viewerWidget->showImage(std::move(pixmap));
         viewerWidget->setFitUpdatesEnabled(true);
+        // 全屏/最大化/非普通窗口态下 auto-resize 不生效，必须按当前视口为这张图重算缩放；
+        // 否则新图会沿用上一张的 displayScale，越切越大并被迫按 Top Center 停靠。
+        if(isFullScreen() || isMaximized() || windowState() != Qt::WindowNoState)
+            recomputeAutoScale();
         viewerWidget->applyCurrentFitMode();
     }
     updateCropPanelData();
@@ -445,16 +490,19 @@ void MW::showImage(std::unique_ptr<QPixmap> pixmap) {
 void MW::showAnimation(std::shared_ptr<QMovie> movie) {
     if(movie) {
         qreal dpr = devicePixelRatioF() > 0 ? devicePixelRatioF() : 1.0;
-        QSize logicalSize = QSizeF(movie->frameRect().size() / dpr).toSize();
+        QSize physicalSize = movie->frameRect().size();
+        QSize logicalSize = QSizeF(physicalSize / dpr).toSize();
         if(settings->autoResizeWindow()) {
             mAutoScaleLogicalSize = logicalSize;
             mAutoScaleActive = true;
             viewerWidget->setAutoScaleActive(true);
         }
         viewerWidget->setFitUpdatesEnabled(false);
-        applyAutoResize(logicalSize);
+        applyAutoResize(physicalSize);
         viewerWidget->showAnimation(movie);
         viewerWidget->setFitUpdatesEnabled(true);
+        if(isFullScreen() || isMaximized() || windowState() != Qt::WindowNoState)
+            recomputeAutoScale();
         viewerWidget->applyCurrentFitMode();
     }
     updateCropPanelData();
@@ -468,6 +516,21 @@ void MW::showVideo(QString file) {
 }
 
 void MW::showContextMenu() {
+    // Wayland 下 QCursor::pos() 不可靠，优先使用触发右键的事件坐标
+    if(mContextMenuPosValid) {
+        mContextMenuPosValid = false;
+        // 刚切完图时 KWin 脚本还在把窗口移到位，此时弹出的菜单会跟着窗口一起偏移。
+        // 等窗口落位后，再按当时的指针位置展开。
+        if(mLastResizeMs != 0
+                && QDateTime::currentMSecsSinceEpoch() - mLastResizeMs < 400) {
+            QTimer::singleShot(50, this, [this] {
+                viewerWidget->showContextMenu(QCursor::pos());
+            });
+            return;
+        }
+        viewerWidget->showContextMenu(mapToGlobal(mContextMenuPos));
+        return;
+    }
     viewerWidget->showContextMenu();
 }
 
@@ -666,11 +729,16 @@ void MW::wheelEvent(QWheelEvent *event) {
 }
 
 void MW::mousePressEvent(QMouseEvent *event) {
+    mContextMenuPosValid = false;
     event->accept();
     actionManager->processEvent(event);
 }
 
 void MW::mouseReleaseEvent(QMouseEvent *event) {
+    if(event->button() == Qt::RightButton) {
+        mContextMenuPos = event->position().toPoint();
+        mContextMenuPosValid = true;
+    }
     event->accept();
     actionManager->processEvent(event);
 }

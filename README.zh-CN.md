@@ -6,7 +6,9 @@
 说面向 KDE，是因为我在 KDE 桌面环境下修改和使用，
 KDE 能轻松开启 "No Titlebar and Frame" 让 qimgv 彻底无标题栏无边框。
 
-**本 fork 极致优化了 KDE 桌面对 qimgv 默认开启 "No Titlebar and Frame" 的使用体验，
+其他 Linux 桌面应该也能体验到这个 fork 的修改便利，但极致体验还是推荐对 qimgv 开启对应桌面环境的无边框窗口化。
+
+✔**本 fork 极致优化了 KDE 桌面对 qimgv 默认开启 "No Titlebar and Frame" 的使用体验，
 让 qimgv 成为 Linux 下非常好用（可能是最好用）的无边框窗口化极简主义图片浏览器。**
 
 上游基线：`master` 的 `3127a2d2`（qimgv 1.0.3）。
@@ -37,6 +39,9 @@ Fork 分支：`kde-tweaks`。
      则回退到可容纳的整数倍率。
    - 开启 `always expand`：比如开启 5x，对于大于屏幕可用区域 1/5 的图片，会开启非整数倍缩放。
    - 滑块选 `-` 则是关闭 Expand 功能，与原版一致。
+
+5. **右键菜单，顶部按钮使用体验调整**
+   - 加入了点击右键菜单顶部非`+` `-` 的四个按钮，可立刻关闭右键菜单的设置
 
 ## 个人推荐最佳体验使用设置
 

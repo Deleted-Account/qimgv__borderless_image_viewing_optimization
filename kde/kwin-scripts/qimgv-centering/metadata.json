@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Id": "qimgv-centering",
+        "Name": "qimgv Centering",
+        "Description": "Re-centers the qimgv window on its work area after each image switch on Wayland",
+        "Icon": "preferences-system-windows-script-test",
+        "License": "GPL-2.0+",
+        "Version": "1.0",
+        "Category": "Utilities",
+        "EnabledByDefault": false
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

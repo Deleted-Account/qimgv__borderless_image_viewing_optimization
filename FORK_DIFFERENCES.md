@@ -272,9 +272,10 @@ The fork adds a local deployment helper, `deploy-system.sh`, which installs:
 - `qimgv` to `/usr/lib/qimgv/qimgv`;
 - `player_mpv.so` to `/usr/lib64/qimgv/player_mpv.so`;
 - translations under `/usr/local/share/qimgv/translations`;
-- `/usr/bin/qimgv` as a wrapper that exports `QT_QPA_PLATFORM=xcb`.
+- `/usr/bin/qimgv` as a wrapper (native Wayland by default; `--xwayland` makes it export `QT_QPA_PLATFORM=xcb`);
+- the KWin script `qimgv-centering` to `/usr/share/kwin/scripts/qimgv-centering`.
 
-XWayland is used deliberately because native Wayland clients cannot reliably reposition already-mapped windows in this workflow.
+Native Wayland is the default. Wayland clients cannot move their own toplevels, so window centering is done by the KWin script, which re-centers the qimgv window after every image switch. `sudo ./deploy-system.sh --xwayland` installs the older XWayland wrapper and disables the script.
 
 A native optimized build can be created with:
 

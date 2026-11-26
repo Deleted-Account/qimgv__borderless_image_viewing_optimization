@@ -272,9 +272,10 @@ fork 添加本地部署脚本 `deploy-system.sh`，安装：
 - `qimgv` 到 `/usr/lib/qimgv/qimgv`；
 - `player_mpv.so` 到 `/usr/lib64/qimgv/player_mpv.so`；
 - 翻译文件到 `/usr/local/share/qimgv/translations`；
-- `/usr/bin/qimgv` wrapper，导出 `QT_QPA_PLATFORM=xcb`。
+- `/usr/bin/qimgv` wrapper（默认原生 Wayland；`--xwayland` 时导出 `QT_QPA_PLATFORM=xcb`）；
+- KWin 脚本 `qimgv-centering` 到 `/usr/share/kwin/scripts/qimgv-centering`。
 
-使用 XWayland 是为了在本工作流中可靠地重定位已映射窗口。
+默认走原生 Wayland。Wayland 客户端不能移动自己的顶层窗口，所以窗口居中由 KWin 脚本完成：每次切换图片后把 qimgv 窗口重新居中。`sudo ./deploy-system.sh --xwayland` 会安装旧的 XWayland wrapper 并停用该脚本。
 
 本机优化构建命令：
 

@@ -137,6 +137,7 @@ private slots:
     void scrollToY(int y);
     void centerOnPixmap();
     void applyCropAlignment();
+    void coverRoundingGap();
     void syncPixmapItemOffset();
     void onScrollTimelineFinished();
 
