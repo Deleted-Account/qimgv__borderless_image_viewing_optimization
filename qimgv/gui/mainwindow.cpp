@@ -1,4 +1,7 @@
 #include "mainwindow.h"
+#include <QThread>
+#include <QEventLoop>
+#include <QElapsedTimer>
 
 FloatingWidgetPosition MW::infoPositionFromIndex(int index) {
     switch(index) {
@@ -660,6 +663,8 @@ void MW::onScalingFinished(std::unique_ptr<QPixmap> scaled) {
 }
 
 void MW::saveWindowGeometry() {
+    if(mStartupSettling)
+        return;
     if(this->windowState() == Qt::WindowNoState)
         settings->setWindowGeometry(geometry());
     settings->setMaximizedWindow(maximized);
@@ -934,16 +939,40 @@ void MW::showWindowed() {
     if(isFullScreen())
         QWidget::showNormal();
     restoreWindowGeometry();
-    QWidget::show();
     if(!mPendingAutoResizeSize.isEmpty() && settings->autoResizeWindow()) {
-        showNormal();
-        qApp->processEvents();
         QSize size = mPendingAutoResizeSize;
         mPendingAutoResizeSize = QSize();
+        if(qApp->platformName() == "wayland") {
+            // Wayland 下真实 dpr 要等窗口映射后才由合成器给出；小数缩放时 Qt 的初值
+            // 可能是错的（实测 1.5 会先报 2.0）。若按初值直接设尺寸，合成器随后会补发
+            // 一个按旧逻辑尺寸计算的 configure 把窗口改回去，表现为冷启动“弹”一下。
+            // 先以最小尺寸映射（1x1，几乎不可见），期间暂停自动调整，等合成器完成
+            // 缩放切换，再用正确的 dpr 一次性设到最终尺寸，窗口第一次可见就是最终大小。
+            setMinimumSize(0, 0);
+            resize(1, 1);
+            showNormal();
+            mStartupSettling = true;
+            mApplyingAutoResize = true;
+            QElapsedTimer settle;
+            settle.start();
+            while(settle.elapsed() < 100) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+                QThread::msleep(1);
+            }
+            mApplyingAutoResize = false;
+            setMinimumSize(10, 10);
+        } else {
+            // X11/XWayland 在映射前就能拿到正确的 dpr，不需要等待
+            showNormal();
+            qApp->processEvents();
+        }
         viewerWidget->setFitUpdatesEnabled(false);
         applyAutoResize(size);
         viewerWidget->setFitUpdatesEnabled(true);
         viewerWidget->applyCurrentFitMode();
+        mStartupSettling = false;
+    } else {
+        QWidget::show();
     }
     viewerWidget->refreshZoomIndicator();
     // try to repaint sooner

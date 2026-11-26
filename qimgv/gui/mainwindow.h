@@ -142,6 +142,7 @@ private:
     void setInteractionEnabled(bool mode);
 
     bool mApplyingAutoResize = false;
+    bool mStartupSettling = false;
     bool mSuppressViewerFit = false;
     bool mAutoScaleActive = false;
     QSize mAutoScaleLogicalSize;
