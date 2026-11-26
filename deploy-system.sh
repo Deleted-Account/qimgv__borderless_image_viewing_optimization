@@ -58,14 +58,14 @@ fi
 chmod 755 /usr/bin/qimgv
 
 echo "Installing KWin centering script..."
-# 不同发行版的系统级 KWin 脚本目录不同，存在的都装一份
-KWIN_SCRIPT_DIRS=(/usr/share/kwin/scripts)
-[ -d /usr/share/kwin-wayland/scripts ] && KWIN_SCRIPT_DIRS+=(/usr/share/kwin-wayland/scripts)
-for d in "${KWIN_SCRIPT_DIRS[@]}"; do
-    install -d "$d/$KWIN_SCRIPT_ID/contents/code"
-    install -m644 "$KWIN_SCRIPT_SRC/metadata.json" "$d/$KWIN_SCRIPT_ID/metadata.json"
-    install -m644 "$KWIN_SCRIPT_SRC/contents/code/main.js" "$d/$KWIN_SCRIPT_ID/contents/code/main.js"
-done
+# Plasma 6 的 KWin 会同时扫描 kwin/scripts 与 kwin-wayland/scripts，
+# 同一个脚本装两份会导致“系统设置 → KWin 脚本”里出现重复条目。
+# 第三方脚本统一装到 kwin/scripts，并清掉旧部署残留在另一目录的副本。
+KWIN_SCRIPT_DIR=/usr/share/kwin/scripts
+install -d "$KWIN_SCRIPT_DIR/$KWIN_SCRIPT_ID/contents/code"
+install -m644 "$KWIN_SCRIPT_SRC/metadata.json" "$KWIN_SCRIPT_DIR/$KWIN_SCRIPT_ID/metadata.json"
+install -m644 "$KWIN_SCRIPT_SRC/contents/code/main.js" "$KWIN_SCRIPT_DIR/$KWIN_SCRIPT_ID/contents/code/main.js"
+rm -rf "/usr/share/kwin-wayland/scripts/$KWIN_SCRIPT_ID"
 
 # 以桌面用户身份写入 kwinrc 并让 KWin 重新加载
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
